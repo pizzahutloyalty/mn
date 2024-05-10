@@ -13325,7 +13325,7 @@ var JotForm = {
                     tmp.classList.remove("form-line-error");
                 });
 
-                document.querySelectorAll(".form-error-message", ".form-button-error").forEach(function (tmp) {
+                document.querySelectorAll(".form-error-message, .form-button-error").forEach(function (tmp) {
                     tmp.remove();
                 });
                 //clear all errors after form called end
@@ -13872,7 +13872,7 @@ var JotForm = {
 
     makeReadyWidgets: function () {
         /* Some widgets need to get 'ready' event, on the first page of the form even if it on the last page before showed */
-        var widgetList = ['5345402093a2afcc5f000004'/* Time Tracker */, '591dafece4a223da050009f9'/* Spreadsheet to Form */];
+        var widgetList = ['5345402093a2afcc5f000004'/* Time Tracker */];
         var widgetsFrames = document.querySelectorAll('iframe.custom-field-frame');
         for (var i=0;i<widgetsFrames.length;i++) {
            if (widgetList.indexOf(widgetsFrames[i].getAttribute('data-client-id')) !== -1) {
