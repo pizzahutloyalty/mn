@@ -75,7 +75,7 @@
   function scrollAndFocus(nextCurrent, line, field, nextButton) {
     state.current = nextCurrent;
     line.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    field.focus({ preventScroll: true }); 
+    field.focus();
     nextButton.disabled = false;
   }
 

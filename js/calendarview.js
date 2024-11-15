@@ -159,7 +159,7 @@ Calendar.handleMouseUpEvent = function(event, key)
     }
 
     // focus action button when clicked
-    if (el) {
+    if (el && isNewDate) {
       setTimeout(function() { el.focus(); }, 0);
     }
     
@@ -317,7 +317,7 @@ function handlePopupUI(calendar, style) {
 
     title.style.display = 'none';
 
-    if (calendar?.triggerElement && calendar?.triggerInputElement) {
+    if (calendar.triggerElement && calendar.triggerInputElement) {
       var dateValue = new Date(calendar.triggerInputElement.value);
       var ariaLabelDate = !isNaN(dateValue) ? 'Change date, ' + dateValue.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Choose Date'
       calendar.triggerElement.setAttribute('aria-label', ariaLabelDate);
@@ -1051,7 +1051,7 @@ Calendar.prototype = {
       this._drawButtonCell(row, '&#x00bb;<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-32 h-32"><path fill-rule="evenodd" d="M11.293 7.293a1 1 0 0 1 1.414 0l7 7a1 1 0 0 1-1.414 1.414L12 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414l7-7Z" clip-rule="evenodd"></path></svg>', 1, Calendar.NAV_NEXT_YEAR, "nextYear");
       table && table.addClassName('calendar-new-header-withSVG');
     } else {
-      this._drawButtonCell(row, '&#x00ab;', 1, Calendar.NAV_PREVIOUS_YEAR, "previousYear", 'Previous Yeaer');
+      this._drawButtonCell(row, '&#x00ab;', 1, Calendar.NAV_PREVIOUS_YEAR, "previousYear", 'Previous Year');
       this._drawButtonCell(row, '&#x2039;', 1, Calendar.NAV_PREVIOUS_MONTH, "previousMonth", 'Previous Month');
       this._drawButtonCell(row, Calendar.TODAY, 3, Calendar.NAV_TODAY, "todayButton", 'Today');
       this._drawButtonCell(row, '&#x203a;', 1, Calendar.NAV_NEXT_MONTH, "nextMonth", 'Next Month');
@@ -1120,9 +1120,10 @@ Calendar.prototype = {
 
   _drawButtonCell: function(parent, text, colSpan, navAction, extraClass, ariaLabel = '')
   {
+    var td          = new Element('td');
     var cell          = new Element('button');
     if (colSpan > 1) {
-        cell.colSpan = colSpan;
+      td.colSpan = colSpan;
     }
     cell.className    = 'button' + (extraClass ? " " + extraClass : "");
     cell.calendar     = this;
@@ -1130,8 +1131,9 @@ Calendar.prototype = {
     cell.innerHTML    = text;
     cell.ariaLabel    = ariaLabel;
     cell.unselectable = 'on'; // IE
-    parent.appendChild(cell);
-    return cell;
+    td.appendChild(cell)
+    parent.appendChild(td);
+    return td;
   },
 
   _drawButtonCellasDiv: function(parent, text, colSpan, navAction, extraClass)
@@ -1183,7 +1185,7 @@ Calendar.prototype = {
 
   // Handle Keyboard Events
   handleDayKeydown: function(e) {
-    var activeDay = document.activeElement?.getAttribute('data-date');
+    var activeDay = document.activeElement.getAttribute('data-date');
     var calendarNode = this.container;
     var isButtonActiveElement = document.activeElement.closest('.calendar-new-header') ? document.activeElement : false;
 
@@ -1208,7 +1210,7 @@ Calendar.prototype = {
       const previousMonthNode = calendarNode.querySelector('.previousMonth');
       const nextYearNode = calendarNode.querySelector('.nextYear');
 
-      if (document.activeElement === previousMonthNode && this?.currentDateElement) {
+      if (document.activeElement === previousMonthNode && this.currentDateElement) {
         setTimeout(() => {
           this.currentDateElement.focus();
         }, 0);
@@ -1251,7 +1253,7 @@ Calendar.prototype = {
 
   makeAccessible: function() {
     this.container.setAttribute('aria-hidden', false);
-    if (this?.triggerElement) {
+    if (this.triggerElement) {
       this.triggerElement.setAttribute('aria-expanded', true);
     }
     this.update(this.date);
@@ -1314,7 +1316,7 @@ Calendar.prototype = {
     document.removeEventListener('keydown', this.handleDayKeydown);
     this.container.hide();
     this.container.setAttribute('aria-hidden', true);
-    if (this?.triggerElement) {
+    if (this.triggerElement) {
       this.triggerElement.setAttribute('aria-expanded', false);
     }
   },

@@ -361,8 +361,291 @@ var JotForm = {
     disableSubmitButton: false,
     disableSubmitButtonMessage: '',
     isConditionDebugMode: false,
+    totalLogCount: 0,
+    isValidJotform(form) {
+      if (!(form instanceof HTMLFormElement)) return false;
+      if (!form.id) return false;
+      if (!form.classList.contains("jotform-form")) return false;
+      return true;
+    },
+    EventObserver: (function intitalizeFormEventObserver() {
+      const searchParams = new URLSearchParams(window.location.search);
+      const isDebugEnabled = searchParams.get('debug') === '1';
+      const isObserverEnabledByUrlParam = searchParams.get('eventObserver') === '1';
+
+      // feature flag --> window.enableEventObserver is set in buildsource.js
+      if (!(window.enableEventObserver || isObserverEnabledByUrlParam)) return null;
+
+      const CONST = {
+        SUBMIT_OBSERVER_NAME: 'submitObserverHandler'
+      };
+      
+      // EventObserver will overwrite "addEventListener" & "submit". Save original methods
+      const _originalFormAddEventListener = HTMLFormElement.prototype.addEventListener;
+      const _originalFormSubmitMethod = HTMLFormElement.prototype.submit;
+    
+      // create EventObserver
+      /** @type {observer.EventObserver} */
+      const EventObserver = {
+        [CONST.SUBMIT_OBSERVER_NAME]: null
+      };
+    
+      /** @type {observer.extendedAddEventListener} */
+      function extendedAddEventListner(eventKey, handler, options) {
+        // only extend new addEventListner to JOTFORM forms
+        // do not include CONST.SUBMIT_OBSERVER_NAME
+        if (isDebugEnabled) console.log({ eventKey, handler, options });
+        if (!JotForm.isValidJotform(this) || handler.name === CONST.SUBMIT_OBSERVER_NAME) {
+          _originalFormAddEventListener.apply(this, arguments);
+          return;
+        }
+        const newStack = new Error().stack;
+        const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
+        const name = (() => {
+          // anon functions from prototype.js will be named "responder"
+          if (handler.name && handler.name !== 'responder') return handler.name;
+          if (!stack) return 'anon-noStack';
+          if (stack.includes('for-widgets-server.js')) return 'forWidgetServer';
+          if (stack.includes('jquery-3.7.1')) return 'jqueryEventWrapper';
+          if (stack.includes('/vendor/maskedinput_')) return 'maskedInputWrapper';
+          return 'anon';
+        })();
+    
+        const order = (() => {
+          if (!options || typeof options === 'boolean') return 0;
+          if (typeof options === 'object' && typeof options.order === 'number') return options.order;
+          return 0;
+        })();
+    
+        const listener = {
+          eventKey,
+          name,
+          handler,
+          stack,
+          order
+        };
+    
+        if (!EventObserver[this.id]) {
+          EventObserver[this.id] = {
+            form: this,
+            listeners: [],
+            submit: {},
+            submitDirect: {}
+          };
+        }
+
+        // add addEventListeners to listeners array.
+        EventObserver[this.id].listeners.push(listener);
+      }
+    
+      // Prevent others from bypassing submit process, ie form.submit()
+      /** @type {observer.preventFormSubmitMethod} */
+      function preventFormSubmitMethod() {
+        if (!JotForm.isValidJotform(this)) {
+          _originalFormSubmitMethod.apply(this);
+          return;
+        }
+        const stack = new Error().stack || '';
+        const splitStack = stack.split('    at ');
+        // Log methods calling form.submit()
+        // to avoid possiblility of infinite loops, return void if form.submit() was called by the same function 4 times in a short timespan
+        if (Array.isArray(splitStack) && splitStack.length > 2) {
+            const handlerName = splitStack[3];
+            const formId = this.id;
+            const formObserver = EventObserver[formId];
+            const submitDirect = formObserver.submitDirect[handlerName];
+            const invokedCount = typeof submitDirect === 'number' ? submitDirect + 1 : 0;
+            if (invokedCount > 4) {
+                if (isDebugEnabled) console.log(handlerName, 'Submit count is greater than 4 - returning void');
+                // reset error count and exit (to avoid inifinite loops)
+                window.JotForm.errorCatcherLog({ message: {
+                    stack,
+                    formId: formId,
+                    handler: handlerName
+                }}, 'EventObserver: form.submit() exceeded call amount');
+                formObserver.submitDirect[handlerName] = 0;
+                return;
+            }
+            
+            const submitted = formObserver.submit && Object.values(formObserver.submit).find(submitInstance => Boolean(submitInstance.submitted));
+            if (isDebugEnabled) console.log({ handlerName, invokedCount });
+            if (submitted) {
+                if (isDebugEnabled) console.log('Form submitted. Returning void.');
+                return;
+            }
+        }
+        
+        // form.submit() will now send a new submit event instead of directly submitting the form.
+        if (isDebugEnabled) console.log('form.submit() was called on a jotform form', this, 'calling form.requestSubmit()');
+        this.requestSubmit();
+      }
+
+      // overwrite addEventListener + submit event
+      HTMLFormElement.prototype.addEventListener = extendedAddEventListner;
+      HTMLFormElement.prototype.submit = preventFormSubmitMethod;
+    
+      // util for submit logging
+      /** @type {observer.addLogEvent} */
+      function addLogEvent({ id, stack, info, observerSubmitEvent }) {
+        observerSubmitEvent.log.push({
+          timestamp: new Date().getTime(),
+          id,
+          info,
+          ...(stack ? { stack } : {})
+        });
+      }
+    
+      /** @type {observer.validateSubmitEvent} */
+      function validateObserverSubmitEvent({ id, observerSubmitEvent }) {
+        addLogEvent({ id, observerSubmitEvent, info: 'Validation Started' });
+        observerSubmitEvent.validationAttempts += 1;
+        const formObserver = observerSubmitEvent.formObserver;
+    
+        const invalidEvents = Object.values(observerSubmitEvent.listeners).filter(listener => {
+          if (listener.valid === null || listener.valid) return false;
+          return true;
+        })
+        const noInvalidEvents = invalidEvents.length === 0;
+    
+        const noPreviousSubmits = Object.values(formObserver.submit).filter(submitEvent => {
+          return submitEvent.submitted;
+        }).length === 0;
+    
+        const validSubmit = noInvalidEvents && noPreviousSubmits;
+        if (!validSubmit) {
+          addLogEvent({ id, observerSubmitEvent, info: 'Validation Complete. Invalid Submit.\nNumber of invalid events: ' + invalidEvents.length + '.\nPreviously submitted: ' +  !noPreviousSubmits + '.'});
+          return;
+        }
+        observerSubmitEvent.submitted = true;
+        observerSubmitEvent.submittedAt = new Date().getTime().toString();
+        trackExecution('observerSubmitHandler_validation-passed-submitting-form');
+        addLogEvent({ id, observerSubmitEvent, info: 'Validation Complete. Valid Submit.' });
+        // form.submit() will be called directly.
+        _originalFormSubmitMethod.apply(formObserver.form);
+      }
+
+      // this function will receieve the real submit event and dispatch local "validation" events to the listeners. 
+      /** @type {observer.handlerSubmitEvent} */
+      function eventObserverSubmitHandler(originalEvent, formId) {
+        const formObserver = EventObserver[formId];
+        if (!formObserver) return;
+
+        // stop submit event from invoking POST request
+        originalEvent.preventDefault();
+        const newStack = new Error().stack;
+        const stackTrace = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
+        trackExecution('observerSubmitHandler_received-submit-event');
+        // create Observer's Immutable SubmitEvent.
+        const observerSubmitEvent = {
+          id: generateUUID(formId),
+          createdAt: new Date().getTime(),
+          validationAttempts: 0,
+          submitted: null,
+          submittedAt: null,
+          listeners: {},
+          log: [],
+          get stack() { return stackTrace },
+          get formObserver() { return formObserver }
+        };
+
+         // add Observer's SubmitEvent to global EventObserver
+         const eventIndex = Object.keys(formObserver.submit).length;
+         formObserver.submit[eventIndex] = observerSubmitEvent;
+
+        // get form submit listeners & add them to Observer's SubmitEvent
+        formObserver.listeners.forEach(function addListener(listener, index) {
+          if (listener.eventKey !== 'submit') return;
+          const listenerName = listener.name + '_' + index;
+    
+          // copy global listener + create new "validation" event for each listener
+          /** @type {observer.listenerInstance} */
+          const createListenerInstance = () => {
+
+            // util to log methods called from listener
+            function logEventMethod(methodName) {
+              const newStack = new Error().stack;
+              const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
+              addLogEvent({ id: listenerName, observerSubmitEvent, info: `${methodName}() invoked`, stack });
+            }
+            let _valid = null;
+            return {
+              name: listenerName,
+              eventKey: listener.eventKey,
+              handler: listener.handler,
+              order: listener.order,
+              get valid() { return _valid },
+              event: {
+                stop() { logEventMethod('stop'); },
+                // add logs to see if listener is calling methods from original submit event
+                // listeners should only use "valid" property
+                preventDefault() { logEventMethod('preventDefault'); },
+                stopPropagation() { logEventMethod('stopPropagation'); },
+                stopImmediatePropagation() { logEventMethod('stopImmediatePropagation'); },
+                composedPath() { logEventMethod('composedPath'); },
+                get valid() { return _valid },
+                get eventId() { return observerSubmitEvent.id },
+                set valid(status) {
+                  if (typeof status !== 'boolean' && status !== null) return;
+                  const newStack = new Error().stack;
+                  const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
+                  if (_valid === status) {
+                    addLogEvent({ id: listenerName, stack, observerSubmitEvent, info: 'valid already set to: ' + status });
+                    return;
+                  }
+                  _valid = status;
+                  addLogEvent({ id: listenerName, observerSubmitEvent, stack, info: 'valid: ' + status });
+                  
+                  if (!observerSubmitEvent.validationAttempts) return;
+                  if (observerSubmitEvent.submitted) return;
+                  validateObserverSubmitEvent({ id: listenerName, observerSubmitEvent });
+                }
+              }
+            }
+          };
+    
+          // add new listenerInstance to Oberserer's SubmitEvent
+          observerSubmitEvent.listeners[listenerName] = createListenerInstance()
+        });
+    
+        // sort listeners by order
+        const orderedEventListeners = Object.values(observerSubmitEvent.listeners).sort((a, z) => {
+          return a.order - z.order;
+        });
+    
+        // Run all Observer's SubmitEvent listeners
+        orderedEventListeners.forEach(listener => {
+          if (typeof listener.handler !== 'function') return;
+    
+          addLogEvent({ id: listener.name, observerSubmitEvent, info: listener.name + ': start' });
+
+          try {
+            // pass new validation event to listener
+            listener.handler.call(formObserver.form, listener.event);
+          } catch (error) {
+            addLogEvent({ id: listener.name, observerSubmitEvent,  info: 'Error: Failed in try catch.', stack: String(error) });
+          }
+          addLogEvent({ id: listener.name, observerSubmitEvent, info: listener.name + ': end' });
+        });
+  
+        // run validateObserverSubmitEvent after calling all listeners
+        validateObserverSubmitEvent({ id: 'Observer', observerSubmitEvent });
+      };
+
+      // Rename 'submitEventHandler' function name to CONST.SUBMIT_OBSERVER_NAME.
+      // CONST.SUBMIT_OBSERVER_NAME will be ignored by new "addEventListener" to recieve the form's original dispatched submit event.
+      Object.defineProperty(eventObserverSubmitHandler, 'name', {
+        enumerable: false,
+        configurable: false,
+        writable: false,
+        value: CONST.SUBMIT_OBSERVER_NAME
+      });
+    
+      EventObserver[CONST.SUBMIT_OBSERVER_NAME] = eventObserverSubmitHandler;
+      return EventObserver;
+    })(),
     encryptAll  : function(e, callback) {
         e.stop();
+        e.valid = false;
 
         var fields = getFieldsToEncrypt();
 
@@ -472,9 +755,37 @@ var JotForm = {
             this.isConditionDebugMode = true;
         }
     },
+    isAgentEmbed: function () {
+        return (window.self !== window.top) && (window.location.href.indexOf("isAIAgentEmbed") > -1);
+    },
     /**
      * Initializes sentry for classic forms
     */
+    initEmbeddedAgent: function (fullStoryUrl = '') {
+        if (window.AgentInitializer && !this.isAgentEmbed()) {
+            const formQueryString = window.location.search;
+            const formUrlParams = new URLSearchParams(formQueryString);
+            const agentChatID = formUrlParams.get('agentChatID');
+            const chatID = agentChatID ? `chatID=${agentChatID}` : '';
+
+            let helperAgentProps = {
+                formID: this.getFormId(),
+                queryParams: ['projectName=formHelperAgent', 'skipWelcome=1', chatID, fullStoryUrl ? `fullStoryUrl=${fullStoryUrl}` : '','maximizable=1'],
+                domain: window.location.origin,
+                isInitialOpen: !window.location.href.includes('isAgentInitialOpen=false'),
+                isDraggable: window.location.href.includes('isAgentDraggable')
+            }
+
+            if (window.formHelperAgentProp) {
+                const {agentHeaderBackgroundColor, avatarIconLink, ...rest} = JSON.parse(window.formHelperAgentProp);
+                helperAgentProps = {...helperAgentProps, background: agentHeaderBackgroundColor, avatarURL:avatarIconLink, ...rest}
+            }
+
+            window.agentInitialized = true;
+            window.AgentInitializer.init(helperAgentProps)
+        }
+    },
+
     initSentry: function() {
         const origin = window.location.origin ?
             window.location.origin :
@@ -612,8 +923,10 @@ var JotForm = {
     },
 
     errorCatcherLog: function (err, logTitle) {
+        const MAX_SAME_LOG_COUNT = 100;
         try {
             if (!location.href.includes('form-templates')) {
+                var self = this;
                 var currFormID = document.getElementsByName('formID')[0].value;
                 var errorData = {
                     stack: err.stack || err.message, agent: navigator.userAgent, referrer: location.href
@@ -638,9 +951,15 @@ var JotForm = {
                     title: logTitle
                 });
 
+                if (self.totalLogCount > MAX_SAME_LOG_COUNT) {
+                    return;
+                }
+                self.totalLogCount++;
+
                 JotForm.createXHRRequest(JotForm.getAPIEndpoint() + '/formInitCatchLogger/' + currFormID, 'post', _payload, function cb(res) {
                     console.log(res)
                 }, function errCb(err) {
+                    self.totalLogCount--;                    
                     console.log(err)
                 });
             }
@@ -775,6 +1094,30 @@ var JotForm = {
                 trackExecution('init-started');
                 // this.initSentry();
 
+                if (window.FS) {
+                  window.onFSError = () => this.initEmbeddedAgent();
+                  window._fs_ready = () => {
+                    this.initEmbeddedAgent(window.FS.getCurrentSessionURL());
+                  }
+                  var agentInitCount = 1;
+                  var agentIntervalID = setInterval(() => {
+                    if (window.AgentInitializer && !window.agentInitialized && !this.isAgentEmbed()) {
+                        clearInterval(agentIntervalID);
+                        var FSSession = window.FS && window.FS.getCurrentSessionURL && window.FS.getCurrentSessionURL();
+                        this.initEmbeddedAgent(FSSession || '');
+                    } else if (agentInitCount > 2) {
+                        clearInterval(agentIntervalID);
+                    }
+                    agentInitCount++;
+                  }, 3000)
+                } else {
+                  this.initEmbeddedAgent();
+                }
+
+                if (document.get.agentPhoneCall == 1 || document.get.chatID) {
+                    appendHiddenInput("chatID", document.get.chatID);
+                }
+                
                 if (typeof window.initializeSignaturePad === 'function') {
                     window.initializeSignaturePad();
                 }
@@ -790,6 +1133,34 @@ var JotForm = {
                     if (location && location.href && location.href.indexOf('&nofs') === -1 && location.href.indexOf('&sid') === -1) {
                         appendHiddenInput('event_id', _uuid);
                     }
+                }
+
+                if (JotForm.EventObserver) {
+                  // add submitObserverHandler to the form's submit event.
+                  // when the JotForm object initialized, we extended the addEventListener's prototype
+                  // and added all submit listeners to "JotForm.EventObserver.listeners"
+                  // the submitObserverHandler will be the only function that will receive the real submit event
+                  // it will then call each submit handler, passing a new event object with additional functionality
+                  // the handler can now set the event to e.valid = true / false
+                  // see the validateAll example below
+
+                  jotformForm.addEventListener("submit", function submitObserverHandler(e) {
+                    // the "e" here will the original submit event.
+                    // possibility of multiple forms - pass form id to to ensure correct form is submitted
+                    JotForm.EventObserver.submitObserverHandler(e, jotformForm.id);
+                  });
+        
+                  jotformForm.addEventListener("submit", function validateAll(e) {
+                      e.valid = JotForm.validateAll(jotformForm);
+                    },
+                    { order: -1 }
+                  );
+                  
+                  if (JotForm.isEncrypted || (JotForm.isEditMode() && !!JotForm.submissionDecryptionKey)) {
+                    jotformForm.addEventListener("submit", function formEncryption(e) {
+                        JotForm.prepareEncyptedFormValues(e)
+                    });
+                  }
                 }
 
                 // Extend the submit method to track the submit source. This helps with identifying empty/blank submissions.
@@ -813,7 +1184,7 @@ var JotForm = {
                                 }
                             }
 
-                            trackSubmitSource(isAIAgentEmbedForm() ? 'ai-agent' : 'direct');
+                            trackSubmitSource('direct');
                         } catch (error) {
                             console.log(error);
                         }
@@ -1028,7 +1399,7 @@ var JotForm = {
                     this.handleBluesnap();
                 }
 
-                if (['cardconnect', 'paysafe', 'chargify', 'firstdata', 'payjunction'].indexOf(this.payment) > -1) {
+                if (['cardconnect', 'paysafe', 'chargify', 'payjunction'].indexOf(this.payment) > -1) {
                     this.PCIGatewaysCardInputValidate();
                 }
 
@@ -1091,9 +1462,6 @@ var JotForm = {
                     }
                     this.setIFrameDeviceType();
                     this.handleIFrameHeight();
-                    if (this.isMobileTouchlessModeTestEnv()) {
-                        this.mobileTouchlessModeTest();
-                    }
 
                     // if there is a recaptcha
                     var visibleCaptcha = document.querySelector('li[data-type="control_captcha"]:not(.always-hidden)');
@@ -1219,6 +1587,7 @@ var JotForm = {
                 this.fixIESubmitURL();
                 this.disableHTML5FormValidation();
                 this.adjustWorkflowFeatures();
+                this.handleWorkflowInternalForm();
                 this.generatePaymentTransactionId();
                 calculateTimeToSubmit();
                 this.setDataCSSSelector();
@@ -1236,9 +1605,6 @@ var JotForm = {
                     document.querySelectorAll('.form-submit-button').forEach(function (b) {
                         b.disabled = true;
                         b.classList.add('conditionallyDisabled');
-                        if (isAIAgentEmbedForm()) {
-                            b.style.display = 'none';
-                        }
                     });
                 }
                 //display all sections
@@ -1252,8 +1618,12 @@ var JotForm = {
 
                 if (isPreview) {
                     this.handlePreview(getQuerystring('filled') === 'true');
-                } else if(this.initializing) {
+                } else if(this.initializing && this.isFormViewTrackingAllowed) {
                     this.track(_uuid);
+                }
+
+                if (this.isWorkflowForm) {
+                    this.setupWorkflowOutcomes();
                 }
 
                 // when a form is embedded via a 3rd party app
@@ -1447,8 +1817,10 @@ var JotForm = {
                         }
 
                         if (mobileSubmitBlock && !e.isTrusted) {
+                            e.valid = false;
                             e.preventDefault();
                         }
+                        e.valid = true;
                     }
 
                     jotformForm.addEventListener('submit', convertEmailToASCII);
@@ -1635,6 +2007,46 @@ var JotForm = {
         window.parent.postMessage('setDeviceType:' + window.CardLayout.layoutParams.deviceType + ':', '*');
     },
 
+    setupWorkflowOutcomes: function() {
+        const workflowOutcomesQuestion = document.querySelector('.wfOutcomes[data-component="workflow_outcomes"]'); // There MUST be only one instance of this rendered, ever.
+        const workflowOutcomesList = workflowOutcomesQuestion.querySelector('.wfOutcomes-list');
+        const workflowOutcomesListItems = workflowOutcomesList.querySelectorAll('.wfOutcomes-list-item');
+        const workflowOutcomesButton = workflowOutcomesQuestion.querySelector('.wfOutcomes-list-button');
+        const workflowOutcomesButtonTextElement = workflowOutcomesButton.querySelector('.wfOutcomes-list-button-text');
+
+        const clearAllOutcomeInputCheckedStates = () => {
+            workflowOutcomesListItems.forEach(listItem => {
+                listItem.querySelector('.wfOutcomes-list-item-input').removeAttribute('checked');
+            })
+        }
+
+        workflowOutcomesQuestion.addEventListener('click', () => {
+            workflowOutcomesList.classList.toggle('isVisible');
+        });
+
+        document.addEventListener('click', e => {
+            if ((e.target !== workflowOutcomesList) && workflowOutcomesList.classList.contains('isVisible')) {
+                workflowOutcomesList.classList.remove('isVisible');
+            }
+        }, true);
+
+        workflowOutcomesList.addEventListener('click', e => {
+            e.stopPropagation();
+        });
+
+        workflowOutcomesListItems.forEach(workflowOutcomesListItem => {
+            workflowOutcomesListItem.addEventListener('click', e => {
+                clearAllOutcomeInputCheckedStates();
+
+                workflowOutcomesListItem.querySelector('.wfOutcomes-list-item-input').setAttribute('checked', '');
+                workflowOutcomesButtonTextElement.innerText = workflowOutcomesListItem.innerText;
+                workflowOutcomesButton.setAttribute('style',workflowOutcomesListItem.readAttribute('style'));
+                workflowOutcomesList.classList.remove('isVisible');
+                e.stopPropagation();
+            });
+        })
+    },
+
     conditionDebugger: function() {
         let calculationMap = null;
         let calculationLoops = null;
@@ -1702,58 +2114,6 @@ var JotForm = {
         };
     },
 
-    isMobileTouchlessModeTestEnv: function (){
-        try {
-            return ((window.self !== window.top) && (window.location.href.indexOf("mobileDebugMode") > -1));
-        } catch (e) {
-            return false;
-        }
-    },
-
-    mobileTouchlessModeTest: function () {
-        var touchlessBox = '<div class="touchless-wrapper"> <div class="touchless-box"> <div class="touchless-info"> <span class="touchless-title">Contactless Form</span> <span class="touchless-desc">Scan QR code for fill the form on your device or continue to fill it here.</span> </div><div class="touchless-qr"> <img src="data:image/png;base64, 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" width="80" height="80"/> </div><style>.jfCard-wrapper.with-qr{padding-top:220px;padding-bottom:50px}.isMobile .jfCard-wrapper.with-qr{padding-top:150px}.jfCard-wrapper.with-qr .jfCard-question,.jfCard-wrapper.with-qr .jfReview-content{max-height:100%!important}.touchless-wrapper{display:flex;align-items:center;justify-content:center;width:100%;padding:20px 14px;text-align:left}.touchless-wrapper,.touchless-wrapper *{box-sizing:border-box}.jfCardForm .touchless-wrapper{padding:12px 30px}.formMode .jfWelcome .touchless-wrapper{display:none}.jfCard-wrapper .touchless-wrapper{position:absolute;top:0}.touchless-box{position:relative;display:flex;flex-direction:row;align-items:center;max-width:500px;padding:20px;background-color:#606d8f;border-radius:10px;box-shadow:0 4px 4px rgba(0,0,0,.05);border:1px solid rgba(44,51,69,.3)}.jfCardForm .touchless-box{background-color:#fff}.isMobile .touchless-box{max-width:400px;padding:16px}.touchless-wrapper:first-child{margin-bottom:0;padding-bottom:0}.touchless-info{flex:1;margin-right:20px;padding-left:5px}.isMobile .touchless-info{margin-right:16px}.touchless-title{display:block;margin-bottom:15px;font-size:22px;font-weight:700;color:#fff}.jfCardForm .touchless-title{color:#2c3345}.isMobile .touchless-title{margin-bottom:10px;font-size:20px}.touchless-desc{display:block;font-size:15px;line-height:19px;color:#fff}.jfCardForm .touchless-desc{color:#2c3345}.isMobile .touchless-desc{font-size:12px;line-height:16px}.touchless-qr{padding:5px;background-color:#fff;border-radius:4px}.touchless-qr img{display:block;width:100px;height:100px}.isMobile .touchless-qr img{width:80px;height:80px}@media screen and (max-width:400px){.jfCardForm .touchless-wrapper{padding:12px 10px}.isMobile .touchless-box{padding:12px}.touchless-title{margin-bottom:7px;font-size:17px}}</style> </div></div>'
-        var maskWrapper = document.querySelector('.jfForm-background-mask');
-        var welcomeWrapper = document.querySelector('.jfWelcome-wrapper');
-        if (window.FORM_MODE == 'cardform') {
-          if (window.CardForm.hasWelcome || document.querySelector('.jfWelcome-wrapper').classList.contains('isHeader')) {
-            var welcomePage = document.querySelector('.jfWelcome');
-            var startButton = welcomePage.querySelector('.jfWelcome-buttonWrapper');
-
-            if (startButton) {
-                startButton.insertAdjacentHTML('beforebegin', touchlessBox);
-            } else {
-                welcomePage.insertAdjacentHTML('beforeend', touchlessBox);
-            }
-          } else {
-            var firstCardWrapper = document.querySelector('.form-line:not(.always-hidden) .jfCard-wrapper');
-            var firstCard = firstCardWrapper.querySelector('.jfCard');
-
-            if (firstCard) {
-                firstCardWrapper.classList.add('with-qr')
-                firstCard.insertAdjacentHTML('afterend', touchlessBox);
-            }
-          }
-
-          window.onload = function() {
-            if (maskWrapper && welcomeWrapper) {
-                maskWrapper.style.width = welcomeWrapper.getBoundingClientRect().width;
-                maskWrapper.style.height = welcomeWrapper.getBoundingClientRect().height;
-            }
-          }
-        } else {
-            var formAll = document.querySelector('.form-all');
-            var firstPage = formAll.querySelector('.form-section');
-            var firstElement = firstPage.querySelector('li');
-            var isFirstElementHead = firstElement.dataset.type === 'control_head';
-
-            if ( isFirstElementHead ) {
-              firstElement.insertAdjacentHTML('afterend', touchlessBox);
-            } else {
-              firstPage.insertAdjacentHTML('afterbegin', touchlessBox);
-            }
-        }
-    },
-
     calendarCheck: function(){
       var section = JotForm.currentSection;
 
@@ -1800,6 +2160,18 @@ var JotForm = {
             console.log("grecaptcha - ", e);
         }
     },
+    postHeightForOEmbed(value) {
+        if (!window.location || window.location.host !== 'oembed.jotform.com') {
+            return;
+        }
+
+        // Embedly
+        window.parent.postMessage(JSON.stringify({
+            src: window.location.toString(),
+            context: 'iframe.resize',
+            height: value
+        }), '*');
+    },
     newHandleIframeHeight: function() {
         const height = JotForm.handleIFrameHeight(true);
         if (height) {
@@ -1810,6 +2182,7 @@ var JotForm = {
                 console.log('Debug : setting height to ', height, ' from new iframe height handler');
             }
             window.parent.postMessage('setHeight:' + height + ':' + JotForm.getFormId(), '*');
+            this.postHeightForOEmbed(height);
             JotForm.prevEmbedFormHeight = height;
         }
     },
@@ -1930,6 +2303,7 @@ var JotForm = {
                 return height;
             }
             window.parent.postMessage('setHeight:' + height + ':' + form.id, '*');
+            this.postHeightForOEmbed(height);
         }
     },
     fixIESubmitURL: function () {
@@ -4869,19 +5243,13 @@ var JotForm = {
                     }
                 });
             } else if (input && input.hasClassName("form-textarea") && input.up('div').down('.nicEdit-main')) {
-                var isHtmlValue = JotForm.getIsHTML(pair.value);
                 var val = pair.value.replace(/\+/g, ' ');
-                if (isHtmlValue) {
-                    if (window.DomPurify) {
-                        val = window.DomPurify.sanitize(val);
-                    }
-                    input.up('div').down('.nicEdit-main').update(val);
-                } else {
-                    input.up('div').down('.nicEdit-main').update(val.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                if (window.DomPurify) {
+                    val = window.DomPurify.sanitize(val);
                 }
+                input.up('div').down('.nicEdit-main').update(val);
             } else if (input && input.hasClassName("form-textarea") && input.up('div').down('.jfTextarea-editor')) {
-                var isHtmlValue = JotForm.getIsHTML(pair.value);
-                if (isHtmlValue && window.DomPurify) {
+                if (window.DomPurify) {
                     pair.value = window.DomPurify.sanitize(pair.value);
                 }
                 input.up('div').down('.jfTextarea-editor').update(pair.value);
@@ -4995,7 +5363,7 @@ var JotForm = {
                     var valueSplittedByComma = value.replace(/([^\\]),/g, '$1\u000B').split('\u000B');
                     allTranslations.each(function(inputValue) {
                         // if input value contains comma, escape it
-                        if(inputValue.indexOf(',') && !(value.includes('<br>'))) {
+                        if(!isPrefill && inputValue.indexOf(',') && !(value.includes('<br>'))) {
                             inputValue = inputValue.replace(/,/g, "\\,");
                         }
 
@@ -5174,7 +5542,6 @@ var JotForm = {
     },
 
     prepareCalculationsOnTheFly: function (questions) {
-        JotForm.errorCatcherLog({}, 'JOT3_IS_USED_PREPARE_CALCULATIONS_ON_THE_FLY_FUNC');
         var questions_by_name = [];
         var questions_by_type = [];
 
@@ -8730,25 +9097,6 @@ var JotForm = {
                               var valArr = val.split("/");
                               var millis = Date.UTC(valArr[2], valArr[0] - 1, valArr[1], 0, 0);
                               val = millis / 60 / 60 / 24 / 1000;
-                            }
-                            break;
-
-                        case "datesDifference":
-                            widgetSettings = $('widget_settings_' + data).value;
-                            if (widgetSettings) {
-                                var settingsData = JSON.parse(decodeURIComponent(widgetSettings));
-                                for (var j = 0; j < settingsData.length; j++) {
-                                    if (settingsData[j].name === 'differenceForCalculation' && settingsData[j].value === 'Yes') {
-                                        val = $('input_' + data).value;
-                                        if (numeric && val) {
-                                            var index = val.indexOf("Difference");
-                                            if (index !== -1) {
-                                                val = val.substring(index);
-                                            }
-                                        }
-                                        break;
-                                    }
-                                }
                             }
                             break;
 
@@ -12997,7 +13345,8 @@ var JotForm = {
                 setTimeout(JotForm.handleIFrameHeight, 300);
             });
         } else { // if the stripe question is required and the form is not connected
-            var paymentQuestion = document.querySelector("li[data-type='control_stripe']");
+            const paymentQuestion = document.querySelector("li[data-type='control_stripe']");
+            if (!paymentQuestion) return;
             var isQuestionRequired = '';
             if (window.FORM_MODE === 'cardform') {
                isQuestionRequired = paymentQuestion.childElements()[0].querySelector(".jfRequiredStar"); // for cardform forms
@@ -13169,6 +13518,9 @@ var JotForm = {
                 });
 
                 highLightable.addEventListener('blur', () => {
+                    if (!window.isHighlightDirty) {
+                        window.isHighlightDirty = true;
+                    }
                     if (!JotForm.highlightInputs) {
                         return;
                     }
@@ -13401,7 +13753,11 @@ var JotForm = {
         }, 60);
     },
 
+    disableButtonStacks: [],
     disableButtons: function () {
+        // Temporarily store stack trace for logging purposes
+        JotForm.disableButtonStacks.push(`${(new Date()).toLocaleTimeString()}: ${Error().stack}`);
+
         setTimeout(function () {
             document.querySelectorAll('.form-submit-button:not(.js-new-sacl-button)').forEach(function (b) {
                 if (b.innerHTML.indexOf('<img') === -1 && (b.type === 'submit' || b.classList.contains('jsMobileSubmit'))) {
@@ -13415,6 +13771,24 @@ var JotForm = {
                 }
                 b.classList.add('lastDisabled');
                 b.disabled = true;
+
+                setTimeout(() => {
+                    // If after 5 seconds the submit button still displays "Please Wait", log the stack trace to kibana
+                    if (window.FORM_MODE !== 'cardform' && b && (b.innerHTML === JotForm.texts.pleaseWait)) {
+                        const jsExecutionTracker = document.querySelector('input[name="jsExecutionTracker"]');
+                        const eventIDElement = document.querySelector('input[name="event_id"]');
+
+                        JotForm.errorCatcherLog({
+                            message: {
+                                stacks: JotForm.disableButtonStacks,
+                                jsExecutionTracker: jsExecutionTracker ? jsExecutionTracker.value : '-',
+                                eventID: eventIDElement ? eventIDElement.value : '-'
+                            }
+                        }, 'STUCK_ON_PLEASE_WAIT');
+
+                        // Clear stack traces if we're not sending a log
+                    } else JotForm.disableButtonStacks = [];
+                }, 1000 * 5);
             });
         }, 60);
     },
@@ -13667,10 +14041,22 @@ var JotForm = {
         this.setPrintButtonActions();
     },
 
+    isValidSuggestedDonation: function () {
+        if (['product', 'subscription'].includes(window.paymentType)) { return true; }
+
+        const donationMinAmount = JotForm.donationField && parseFloat(JotForm.donationField.readAttribute('data-min-amount'));
+        if (donationMinAmount && !isNaN(donationMinAmount)) {
+            const donationValue = JotForm.donationField.getValue();
+            return !(isNaN(donationValue) || donationValue < donationMinAmount);
+        }
+
+        return true;
+    },
+
     hasMinTotalOrderAmount: function () {
         var minTotalOrderAmountHiddenField = document.getElementsByName('minTotalOrderAmount');
         var hasMinTotalOrderAmount = typeof minTotalOrderAmountHiddenField !== 'undefined' && minTotalOrderAmountHiddenField.length > 0;
-        var minTotalOrderAmount = hasMinTotalOrderAmount === true ? minTotalOrderAmountHiddenField[0].value : '0';
+        var minTotalOrderAmount = hasMinTotalOrderAmount === true && window.paymentType === 'product' ? minTotalOrderAmountHiddenField[0].value : '0';
 
         JotForm.minTotalOrderAmount = minTotalOrderAmount;
 
@@ -14277,7 +14663,61 @@ var JotForm = {
             });
         }
     },
+    /**
+     * @description Validates text returns boolean without side effects.
+     * @param { HTMLInputElement } input 
+     * @param {{
+     *  minLength: number | undefined,
+     *  maxLength: number | undefined,
+     *  ignore: ('hidden' | 'nonRequired')[] | undefined
+     * }} config 
+     */
+    isTextInputValid: function(input, config = {}) {
+        if (!input) return false;
+        if (!(input instanceof HTMLInputElement)) return false;
 
+        function convertToValidNumber(value) {
+            if (value === -1 || value === '-1') return null;
+            const validNumber = parseInt(value);
+            if (Number.isNaN(validNumber)) {
+                if (JotForm.debug) console.error('Unable to convert number. Value provided: ' + value +  ' returned NaN.');
+                return null;
+            }
+            return validNumber;
+        }
+
+        const options = {
+            minLength: convertToValidNumber(config.minLength),
+            maxLength: convertToValidNumber(config.maxLength),
+        };
+
+        const ignoreHiddenInputs = Array.isArray(config.ignore) ? config.ignore.indexOf('hidden') > -1 : false;
+        const ignoreNonRequiredInputs = Array.isArray(config.ignore) ? config.ignore.indexOf('nonRequired') > -1 : false;
+
+        const inputRequired = input.className.toLowerCase().includes('required') || Boolean(input.required);
+        if (ignoreHiddenInputs && !JotForm.isVisible(input)) return true;
+        if (ignoreNonRequiredInputs && !inputRequired) return true;
+        if (options.minLength !== null && input.value.length < options.minLength) return false;
+        if (options.maxLength !== null && input.value.length > options.maxLength) return false;
+        return true;
+    },
+     /**
+     * @description Validates array of inputs
+     * @param { HTMLInputElement[] } inputs 
+     */
+    getInvalidInputs(inputs) {
+        const invalidInputs = Array.from(inputs).filter(input => {
+            const validInput = JotForm.isTextInputValid(input, {
+                minLength: input.dataset.minlength,
+                maxLength: input.maxLength,
+                ignore: ['hidden', 'nonRequired']
+            });
+            if (!validInput) return true;
+            input.classList.remove('form-validation-error');
+            return false;
+        });
+        return invalidInputs;
+    },
     /**
      * Handles the validation for minimum character length of control_textbox field
      */
@@ -14310,6 +14750,13 @@ var JotForm = {
                             }
                         });
 
+                    }
+                    const container = JotForm.getContainer(item);
+                    const isFillInTheBlanksContainer = container.dataset.type === 'control_inline' && Boolean(container.querySelector('div.FITB'));
+                    if (isFillInTheBlanksContainer) {
+                        const inputsToValidate = container.querySelectorAll('input[class*="validate"]');
+                        const invalidInputs = JotForm.getInvalidInputs(inputsToValidate);
+                        if (invalidInputs.length) return false;
                     }
                     //remove error display
                     if (!error) {
@@ -15225,7 +15672,6 @@ var JotForm = {
             }
             const erroredLine = firstError.closest('.form-line')
             if (!JotForm.noJump && erroredLine) {
-                erroredLine.scrollIntoView();
                 const firstInput = erroredLine.querySelector('input,select,textarea');
                 if (firstInput && firstInput.isVisible()) {
                     firstInput.focus();
@@ -15272,8 +15718,9 @@ var JotForm = {
             });
         });
         var thisForm = $$('.jotform-form')[0];
+        var paymentField = $$('input[name="simple_fpc"]')[0];
         var paymentFieldId = $$('input[name="simple_fpc"]')[0].value;
-        Event.observe(thisForm, 'submit', function (event) {
+        thisForm.addEventListener('submit', function PCIGatewaysCardInputValidation(event) {
             // clear errors first
             var ccFields = $$('#id_' + paymentFieldId + ' input[class*="cc"]', '#id_' + paymentFieldId + ' select[class*="cc"]');
             ccFields.each(function(input){
@@ -15296,37 +15743,14 @@ var JotForm = {
                 if (errors) {
                     Event.stop(event);
                     setTimeout(function () {
-                        erroredFields.forEach(function(input){
-                            JotForm.errored(input, errors);
-                        });
-                        // on multi-page forms, attach error to submit button if it is in a page separate from the Authnet fields
-                        var cc_number = $$('.cc_number')[0];
-                        if (!cc_number.isVisible()
-                            && !cc_number.up('li').hasClassName('form-field-hidden') // not hidden by condition
-                            && !cc_number.up('ul').hasClassName('form-field-hidden') // not inside a form collapse hidden by a condition
-                            && $$('ul.form-section.page-section').length > 1)  // this is a multipage form
-                        {
-                            var visibleButtons = [];
-                            $$('.form-submit-button').each(function (btn) {
-                                if (btn.isVisible()) {
-                                    visibleButtons.push(btn);
-                                }
+                        if (JotForm.isSectionTouched(JotForm.getSection(paymentField))) {
+                            erroredFields.forEach(function(input){
+                                JotForm.errored(input, errors);
                             });
-                            if (visibleButtons.length < 1) {
-                                return;
-                            } // no visible submit buttons
-                            var lastButton = visibleButtons[visibleButtons.length - 1];
-                            // clear prior errors
-                            $$('.form-card-error').invoke('remove');
-
-                            var errorBox = document.createElement('div');
-                            errorBox.className = 'form-button-error form-card-error';
-                            errorBox.innerHTML = '<p>' + errors + '</p>';
-
-                            $(lastButton.parentNode.parentNode).insert(errorBox);
+                            return;
                         }
                         JotForm.enableButtons();
-                    }, 500);
+                    }, 0);
                 }
             }
         });
@@ -15437,8 +15861,8 @@ var JotForm = {
          history.replaceState(Object.assign({}, history.state, { signatureValues: [] }), null, null);
     }
     // TODO: remove this line after the release of the new Signature Modal.
-    if (window.JotForm.isSignForm !== "Yes") return;
-
+    const useSignatureLibrary = JotForm.isSignForm === 'Yes' || JotForm.isWorkflowForm;
+    if (!useSignatureLibrary) return;
     var signatures = document.querySelectorAll('li[data-type="control_signature"]')
     if (signatures && signatures.length > 0) {
       Array.from(signatures).forEach(function(inputContainer) {
@@ -15684,7 +16108,7 @@ var JotForm = {
         if ($('creditCardTable')) {
             var thisForm = document.querySelector('.jotform-form');
             var paymentFieldId = document.querySelector('input[name="simple_fpc"]').value;
-            Event.observe(thisForm, 'submit', function (event) {
+            thisForm.addEventListener('submit', function handlePaypalPro(event) {
 
                 if (JotForm.isEditMode()) {
                     return true;
@@ -16146,7 +16570,7 @@ var JotForm = {
 
             const hasPayment = !!document.querySelector('[data-payment="true"]');
             const isPaymentVisible = hasPayment && JotForm.isVisible($$('[data-payment="true"]')[0]);
-            if (isPaymentVisible && typeof window.ValidatePaymentGateways !== 'undefined' && window.paymentType) {
+            if (isPaymentVisible && typeof window.ValidatePaymentGateways !== 'undefined' && JotForm.payment) {
                 ret = !ValidatePaymentGateways.validate(JotForm.payment) ? false : ret;
             }
 
@@ -16162,7 +16586,7 @@ var JotForm = {
 
             if (isPaymentVisible) {
                 const invalidPaymentStock = window.FORM_MODE != 'cardform' && typeof PaymentStock !== 'undefined' && !PaymentStock.validations.validateStock();
-                const invalidMinTotalAmount = JotForm.handleMinTotalOrderAmount() === true && window.paymentType === 'product';
+                const invalidMinTotalAmount = JotForm.handleMinTotalOrderAmount() === true;
                 if (invalidPaymentStock || invalidMinTotalAmount) {
                     ret = false;
                 }
@@ -16352,6 +16776,10 @@ var JotForm = {
 
         if(JotForm.isPaymentSelected() && !JotForm.isValidMinTotalOrderAmount() && container.classList.contains("form-minTotalOrderAmount-error")) {
           return;
+        }
+
+        if (JotForm.isPaymentSelected() && !JotForm.isValidSuggestedDonation()) {
+            return;
         }
 
         if (
@@ -16593,29 +17021,26 @@ var JotForm = {
                         if (!aSubmitIsVisible) {
                             JotForm.enableButtons();
                             e.stop();
+                            e.valid = false;
                         }
-                        // invisible recaptcha for classic forms
-                        var invisibleCaptchaWrapper = $$('[data-invisible-captcha="true"]');
-                        var hasInvisibleCaptcha = !!invisibleCaptchaWrapper.length;
-                        if (hasInvisibleCaptcha) {
-                            var recaptchasHiddenInput = invisibleCaptchaWrapper[0].select('[name="recaptcha_invisible"]')[0];
-                            var isCaptchaValidated = recaptchasHiddenInput && recaptchasHiddenInput.getValue();
-                            if (!isCaptchaValidated) {
-                                const isEmbed = window.parent && window.parent !== window;
-                                if (isEmbed) {
-                                    attachScrollToCaptcha(form);
-                                }
-                                window.grecaptcha.execute().then(() => {
-                                    console.log('Captcha initialized')
-                                    JotForm.enableButtons();
-                                }).catch(() => {
-                                    console.log('Captcha cannot be initialized')
-                                    JotForm.enableButtons();
-                                })
 
-                                e.stop();
-                                return;
-                            }
+                        // invisible recaptcha for classic forms
+                        var invisibleCaptcha = document.querySelector('[data-invisible-captcha="true"] [name="recaptcha_invisible"]');
+                        if (invisibleCaptcha && !invisibleCaptcha.value) {
+                            attachCaptchaVisibilityObserver(form);
+
+                            window.grecaptcha.execute().then(() => {
+                                console.log('Captcha initialized');
+                                // In the event the mutation observer fails to initialize, enable buttons as a fallback
+                                if (!form.invisibleCaptchaStyleObserverAttached) JotForm.enableButtons();
+                            }).catch(() => {
+                                console.log('Captcha cannot be initialized');
+                                JotForm.enableButtons();
+                            });
+
+                            e.stop();
+                            e.valid = false;
+                            return;
                         }
                     }
 
@@ -16623,6 +17048,7 @@ var JotForm = {
                         JotForm.toggleDisableSubmitMessage();
                         JotForm.enableButtons();
                         e.stop();
+                        e.valid = false;
                         return;
                     }
 
@@ -16647,9 +17073,7 @@ var JotForm = {
                                     }
                                 }
                             } else if (JotForm.submitError == "jumpToFirstError") {
-                                setTimeout(function () {
-                                    JotForm.setPagePositionForError();
-                                }, 100);
+                                JotForm.setPagePositionForError();
                             }
                         }
 
@@ -16658,6 +17082,7 @@ var JotForm = {
                         });
 
                         e.stop();
+                        e.valid = false;
                         return;
                     }
 
@@ -16678,6 +17103,35 @@ var JotForm = {
                             name: 'validatedNewRequiredFieldIDs',
                             value: 'Invalid Value: ' + typeof JotForm.validatedRequiredFieldIDs
                         }));
+                    }
+
+                    if (!window.agentHelperChatID) {
+                        var agentHelperIframe = document.getElementById('form-agent-helper');
+                        if (agentHelperIframe) {
+                            var iframeWindow = agentHelperIframe.contentWindow;
+                            var agentHelperID = iframeWindow.chatID;
+                            if (agentHelperID) {
+                                form.appendChild(createHiddenInputElement({
+                                    name: 'agentHelperChatID',
+                                    value: agentHelperID
+                                }));
+                                window.agentHelperChatID = agentHelperID;
+                            }
+                        }   
+                    }
+
+                    if (window.location.href.includes('agentImplementationID') && !window.agentImplementationID) {
+                        var agentQueryString = window.location.search;
+                        var agentUrlParams = new URLSearchParams(agentQueryString);
+                        var agentImplementationID = agentUrlParams.get('agentImplementationID');
+
+                        if (agentImplementationID) {
+                            form.appendChild(createHiddenInputElement({
+                                name: 'agentImplementationID',
+                                value: agentImplementationID
+                            }));
+                            window.agentImplementationID = agentImplementationID;
+                        }
                     }
 
                     if (Object.keys(JotForm.visitedPages).length) {
@@ -16760,6 +17214,7 @@ var JotForm = {
                 } catch (err) {
                     JotForm.error(err);
                     e.stop();
+                    e.valid = false;
                     var logTitle = e.stopped ? 'FORM_VALIDATION_ERROR' : 'FORM_VALIDATION_EVENT_NOT_STOPPED';
                     $this.errorCatcherLog(err, logTitle);
                     return;
@@ -16829,6 +17284,7 @@ var JotForm = {
 
                 if (JotForm.compact && JotForm.imageSaved == false) {
                     e.stop();
+                    e.valid = false;
                     window.parent.saveAsImage();
                     // JotForm.enableButtons();
                     $(document).observe('image:loaded', function () {
@@ -16859,34 +17315,9 @@ var JotForm = {
                         });
                     }
                 }
-                var previouslyEncryptedWithV2 = JotForm.isEditMode() && !!JotForm.submissionDecryptionKey;
-                var signatureInputValues = document.querySelectorAll('.signature-line input[type="hidden"]');
-                var signatureValuesArray = Array.from(signatureInputValues).map(function(signInputItem) {
-                    return { id: signInputItem.id, value: signInputItem.value };
-                });
-                history.pushState({ signatureValues: signatureValuesArray }, null, null);
 
-                if (JotForm.isEncrypted || previouslyEncryptedWithV2) {
-                    var redirectConditions = {};
-                    $A(JotForm.conditions).each(function (condition) {
-                        if(!condition.disabled && condition.type === 'url') {
-                            redirectConditions[condition.id] = JotForm.checkCondition(condition);
-                        }
-                    });
-                    JotForm.encryptAll(e, function(submitForm) {
-                        if (submitForm) {
-                            // Check if there are conditions for redirection
-                            if (Object.keys(redirectConditions).length > 0) {
-                                appendHiddenInput('redirectConditions', JSON.stringify(redirectConditions));
-                            }
-                            if(!window.offlineForm) {
-                                // Validation already passed, no need to trigger it again
-                                JotForm.ignoreDirectValidation = true;
-                                form.submit();
-                            }
-                        }
-                    });
-                }
+                JotForm.prepareEncyptedFormValues(e, {form:form});
+
                 const dateElements = document.querySelectorAll('[data-type=control_datetime] input[class*="validate"][class*="limitDate"]');
                 if (dateElements.length > 0) {
                     JotForm.errorCatcherLog({ message: {
@@ -16897,31 +17328,11 @@ var JotForm = {
                 JotForm.sendFormOpenId(form, 'clientSubmitFinish_V5');
 
                 history.replaceState(Object.assign({}, history.state, { submitted: true }), null, null);
+                e.valid = true;
             };
 
             // Set on submit validation
-            form.observe('submit', handleFormSubmit);
-
-            if (isAIAgentEmbedForm()) {
-                window.addEventListener("message", function (message) {
-                    try {
-                        if (message.data === 'submitDraft') {
-                            if (window.location.href.indexOf("chatID") > -1) {
-                                const queryParameters = new URLSearchParams(window.location.search);
-                                const chatID = queryParameters.get('chatID');
-                                trackChatIDForAIAgent(chatID);
-                                if (JotForm.validateAll(form)) {
-                                    form.submit();
-                                } else {
-                                    window.parent.postMessage({ action: 'validation-error' }, '*');
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        console.error('errorOnAIAgentMessage', e);
-                    }
-                }, false);
-            }
+            form.addEventListener('submit', handleFormSubmit);
 
             /*
                 Empty Submission testing: Check if on submit handler was correctly mounted by checking prototype.js
@@ -17082,6 +17493,53 @@ var JotForm = {
 
             });
         });
+    },
+
+    prepareEncyptedFormValues: function(e, options) {
+        var previouslyEncryptedWithV2 = JotForm.isEditMode() && !!JotForm.submissionDecryptionKey;
+        var signatureInputValues = document.querySelectorAll('.signature-line input[type="hidden"]');
+        var signatureValuesArray = Array.from(signatureInputValues).map(function(signInputItem) {
+            return { id: signInputItem.id, value: signInputItem.value };
+        });
+        history.pushState({ signatureValues: signatureValuesArray }, null, null);
+
+        if (JotForm.isEncrypted || previouslyEncryptedWithV2) {
+            var redirectConditions = {};
+            $A(JotForm.conditions).each(function (condition) {
+                if(!condition.disabled && condition.type === 'url') {
+                    redirectConditions[condition.id] = JotForm.checkCondition(condition);
+                }
+            });
+            JotForm.encryptAll(e, function(submitForm) {
+                if (submitForm) {
+                    // Check if there are conditions for redirection
+                    if (Object.keys(redirectConditions).length > 0) {
+                        appendHiddenInput('redirectConditions', JSON.stringify(redirectConditions));
+                    }
+                    if(!window.offlineForm) {
+                        // Validation already passed, no need to trigger it again
+                        JotForm.ignoreDirectValidation = true;
+                        if (!JotForm.EventObserver) {
+                            options.form.submit();
+                        }
+                        e.valid = true;
+                    }
+                } else if (options.submitForm === true) {
+                    // options.submitForm is being used by paypalcomplete.js
+                    // EventObserver will separate form encryption and paypalcomplete into two distinct validation events. 
+                    // if EventObserver exists, each handler will receive their own validation event - we can safely ignore options.form.submit()
+                    if (!JotForm.EventObserver) {
+                        options.form.submit();
+                    }
+                }
+            });
+        } else if (options.submitForm === true) {
+            // options.submitForm is being used by paypalcomplete.js
+            // see above comment
+            if (!JotForm.EventObserver) {
+                options.form.submit();
+            }
+        }
     },
 
     dateFromField: function(field) {
@@ -17772,8 +18230,9 @@ var JotForm = {
                             }
                             // if credit card fields
                             // skip checking paymenttotal for card form since it will be in a different card
+                            const excludedControls = ['control_fullname', 'control_phone'];
                             if (window.FORM_MODE !== 'cardform') {
-                                if (e.name && e.name.match(/cc_/)) {
+                                if (e.name && e.name.match(/cc_/) && !excludedControls.includes(cont.dataset.type)) {
                                     return JotForm.paymentTotal == 0;
                                 }
                             }
@@ -18332,7 +18791,6 @@ var JotForm = {
         var params = $H(fields).keys().without("pic_with_logo"); // remove photo from params, we'll do a separate call for it
 
         var callback = function (input) {
-            JotForm.bringOldFBSubmissionBack(id);
             JotForm.getForm(input).insert({
                 top: createHiddenInputElement({ name: 'fb_user_id', id: 'fb_user_id', value: id })
             });
@@ -18375,27 +18833,6 @@ var JotForm = {
         // Because user has completed the FB login operation and we have collected the info
         $$('.fb-login-buttons').invoke('show');
         $$('.fb-login-label').invoke('hide');
-    },
-
-    bringOldFBSubmissionBack: function (id) {
-
-        var formIDField = $$('input[name="formID"]')[0];
-
-        if(formIDField && formIDField.value){
-            new Ajax.Jsonp(JotForm.url + 'server/bring-old-fbsubmission-back', {
-                parameters: {
-                    formID: formIDField.value,
-                    fbid: id
-                },
-                evalJSON: 'force',
-                onComplete: function (t) {
-                    var res = t.responseJSON;
-                    if (res.success) {
-                        JotForm.editMode(res, true, ['control_helper', 'control_fileupload']); // Don't reset fields
-                    }
-                }
-            });
-        }
     },
 
     setCustomHint: function (elem, value) {
@@ -18497,7 +18934,7 @@ var JotForm = {
         var form = element.closest('form.jotform-form');
         if (form)
         {
-            form.addEventListener('submit', function () {
+            form.addEventListener('submit', function setCustomHint() {
             this.querySelectorAll('.custom-hint-group').forEach(function (elem) {
                 if (elem.type === 'textarea' && elem.hasAttribute('data-richtext')) {
                     var editorInstance = nicEditors.findEditor(elem.id);
@@ -20381,7 +20818,37 @@ var JotForm = {
         var isCardForm = window.FORM_MODE === 'cardform';
         var url = JotForm.server + '?action=getPrefillData&formID=' + _form.id + '&key=' + prefillToken;
         var data = {};
+
+        const isUpgradePrefillTicketForm = JotForm.enterprise && JotForm.enterprise.includes('upgrade') && _form && _form.id === '242486710294965';
+        if (isUpgradePrefillTicketForm) {
+            JotForm.errorCatcherLog({
+                message: {
+                    currentTimeInClient: new Date().toUTCString(),
+                    message: 'FORM_PREFILL_START'
+                }
+            }, 'FORM_PREFILL_DEBUG');
+        }
         JotForm.createXHRRequest(url, 'get', null, function(res) {
+            try {
+                if (isUpgradePrefillTicketForm) {
+                    const prefillData = Object.entries(res.data || {}).map(([key, value]) => {
+                        let maskedValue = value || '';
+                        if (value.length === 2) {
+                            maskedValue = value[0] + '#';
+                        }
+                        if (value.length > 2) {
+                            maskedValue = value[0] + value[1] + '#'.repeat(value.length - 2);
+                        }
+                        return { id: key, maskedValue };
+                    })
+
+                    JotForm.errorCatcherLog({
+                        message: {
+                            prefillData: res && res.data ? prefillData : 'RESPONSE EMPTY',
+                            message: 'FORM_PREFILL_REQUEST_RESPONDED'
+                        }
+                    }, 'FORM_PREFILL_DEBUG');
+                }
             $H(res.data).each(function(pair) {
                 if (pair.value === true) pair.value = 'true';
                 else if (pair.value === false) pair.value = 'false';
@@ -20563,8 +21030,26 @@ var JotForm = {
             });
             JotForm.prePopulations(data, true);
             JotForm.onTranslationsFetch(dispatchCompletedEvent);
+            } catch (error) {
+                console.log(error);
+                // TODO: Delete this logs when 19959791 ticket resolves;
+                if (isUpgradePrefillTicketForm) {
+                    JotForm.errorCatcherLog({message: {
+                        error,
+                        message: 'FORM_PREFILL_IMPLEMENTATION_ERROR'
+                    }}, 'FORM_PREFILL_DEBUG');
+                }
+            }
+
         }, function(err) {
             console.log(err);
+            // TODO: Delete this logs when 19959791 ticket resolves;
+            if (isUpgradePrefillTicketForm) {
+                JotForm.errorCatcherLog({message: {
+                    error: err,
+                    message: 'FORM_PREFILL_REQUEST_ERROR'
+                }}, 'FORM_PREFILL_DEBUG');
+            }
             dispatchCompletedEvent();
         });
         function dispatchCompletedEvent() {
@@ -20572,6 +21057,14 @@ var JotForm = {
                 var event = document.createEvent('CustomEvent');
                 event.initEvent('PrefillCompleted', false, false);
                 document.dispatchEvent(event);
+                if (isUpgradePrefillTicketForm) {
+                    JotForm.errorCatcherLog({
+                        message: {
+                            currentTimeInClient: new Date().toUTCString(),
+                            message: 'FORM_PREFILL_END'
+                        }
+                    }, 'FORM_PREFILL_DEBUG');
+                }
             }
         }
 
@@ -20759,8 +21252,34 @@ var JotForm = {
         }, false)
     },
 
+    handleWorkflowInternalForm(params) {
+        try {
+            if (params || typeof document.get === 'object') {
+                if(!params){  params = {}; }
+                var workflowTaskIDElement = document.querySelector('input[type="hidden"][name="workflowTaskID"]');
+                var workflowTokenElement = document.querySelector('input[type="hidden"][name="workflowToken"]');
+                if (!workflowTaskIDElement || !workflowTokenElement) {
+                    return
+                }
+                JotForm.createXHRRequest(JotForm.getAPIEndpoint() + '/workflow/task/' + workflowTaskIDElement.value + '?token=' + workflowTokenElement.value, 'GET', null, function cb(res) {
+                    var task = (res && res.content && typeof res.content === 'object') ? res.content : {}
+                    if (task.status !== 'ACTIVE') {
+                        console.log('Task not active, reloading.');
+                        window.location.reload(true);
+                        return;
+                    }
+                }, function errCb(err) {
+                    console.log(err)
+                }, false, true);
+            }
+        } catch (e) {
+            console.log('Error handleWorkflowInternalForm', e);
+        }
+    },
+
     adjustWorkflowFeatures: function(params) {
         try {
+            // TODO: clean this up
             if (params || typeof document.get === 'object') {
                 if(!params){  params = {}; }
                 var wfTaskType = false;
@@ -21155,14 +21674,6 @@ function callIframeHeightCaller() {
     JotForm.iframeHeightCaller();
 };
 
-function isAIAgentEmbedForm() {
-    try {
-        return ((window.self !== window.top) && (window.location.href.indexOf("isAIAgentEmbed") > -1));
-    } catch (e) {
-        return false;
-    }
-}
-
 if(isIframeEmbedForm()) {
     document.querySelector('html').addClassName('isIframeEmbed');
     window.addEventListener('resize', callIframeHeightCaller);
@@ -21348,7 +21859,7 @@ function getFieldsToEncrypt() {
             return;
         }
 
-        if ((!field.value && questionType !== 'control_matrix')  || (field.value.length > 300 && field.value.indexOf('==') == field.value.length - 2)) {
+        if ((!field.value && questionType !== 'control_matrix')  || (field.value && field.value.length > 300 && field.value.indexOf('==') == field.value.length - 2)) {
             return;
         }
 
@@ -21448,20 +21959,6 @@ function trackSubmitSource(value) {
             } else {
                 // If the input was somehow removed, create a new input and set original event
                 appendHiddenInput('submitSource', value);
-            }
-        }
-    });
-}
-
-function trackChatIDForAIAgent(value) {
-    $A(document.forms).each(function (form) {
-        if (form.name === "form_" + form.id) {
-            var chatIDTrackerElement = form.querySelector('[name="chatID"]');
-            if (chatIDTrackerElement) {
-                chatIDTrackerElement.value = value;
-            } else {
-                // If the input was somehow removed, create a new input and set original event
-                appendHiddenInput('chatID', value);
             }
         }
     });
@@ -21616,31 +22113,32 @@ function addEncryptionKeyToForm(encryptionKey) {
     }
 }
 
-function attachScrollToCaptcha(form) {
-    let target;
-    const targetParent = document.querySelector('div:not(.grecaptcha-logo) > iframe[src*="google.com/recaptcha"]');
+function attachCaptchaVisibilityObserver(form) {
+    if (form.invisibleCaptchaStyleObserverAttached) return;
 
-    if (targetParent !== null && targetParent !== undefined) {
-        const parentElement = targetParent.parentElement;
-        if (parentElement !== null && parentElement !== undefined) {
-            target = parentElement.parentElement;
-        }
-    }
+    let target = document.querySelector('div:not(.grecaptcha-logo) > iframe[src*="google.com/recaptcha"]');
+
+    // Grab the element which is responsible for the Captcha visibility
+    target = target && target.parentElement && target.parentElement.parentElement;
 
     if (!target) {
         console.log("couldn't find recaptcha element");
         return;
     }
 
-    if (!form.invisibleCaptchaStyleObserverAttached) {
-        const observer = new MutationObserver(() => {
-            if (target.style.visibility === 'visible') {
-                target.scrollIntoView();
-            }
-        });
-        observer.observe(target, { attributes : true, attributeFilter: ['style'] });
-        form.invisibleCaptchaStyleObserverAttached = true;
-    }
+    const observer = new MutationObserver(() => {
+        if (target.style.visibility === 'hidden') {
+            // Re-enable form submit buttons if user dismissed the captcha challenge
+            JotForm.enableButtons();
+        } else if (target.style.visibility === 'visible' && window.parent !== window) {
+            // If form is embedded, scroll captcha challenge into view
+            target.scrollIntoView();
+        }
+    });
+
+    observer.observe(target, { attributes : true, attributeFilter: ['style'] });
+
+    form.invisibleCaptchaStyleObserverAttached = true;
 }
 
 function generateUUID(formID) {
