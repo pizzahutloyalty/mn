@@ -780,12 +780,20 @@ var JotForm = {
             const formUrlParams = new URLSearchParams(formQueryString);
             const agentChatID = formUrlParams.get('agentChatID');
             const chatID = agentChatID ? `chatID=${agentChatID}` : '';
+            const urlParams = new URLSearchParams(window.location.search);
+            const isInitialOpenParam = urlParams.get('isAgentInitialOpen');
+
+            const isInitialOpen =
+              isInitialOpenParam === 'true' ? true :
+              isInitialOpenParam === 'false' ? false :
+              undefined;
+            
 
             let helperAgentProps = {
                 formID: this.getFormId(),
                 queryParams: ['projectName=formHelperAgent', 'skipWelcome=1', chatID, fullStoryUrl ? `fullStoryUrl=${fullStoryUrl}` : '','maximizable=1'],
                 domain: window.location.origin,
-                isInitialOpen: window.location.href.includes('isAgentInitialOpen=false') ? false : undefined,
+                isInitialOpen,
                 isDraggable: window.location.href.includes('isAgentDraggable')
             }
 
@@ -795,110 +803,24 @@ var JotForm = {
             }
 
             window.agentInitialized = true;
-            window.AgentInitializer.init(helperAgentProps)
-        }
-    },
+            const isCardformWithWelcome = window.FORM_MODE === 'cardform' && document.querySelector('.welcomeMode') !== null;
+            const isPDFFormWithWelcome = !!JotForm.importedPDF && document.querySelector('html').getAttribute('data-mode') === 'welcomeMode';
 
-    initSentry: function() {
-        const origin = window.location.origin ?
-            window.location.origin :
-            // Fix for Internet Exporer 10 - window.location doesn't have origin property in IE10
-            window.location.protocol + "//" + window.location.hostname + (window.location.port ? ':' + window.location.port: '');
-
-        const isHIPAAEnterprise = typeof JotForm.enterprise !== 'undefined' && JotForm.enterprise && typeof JotForm.hipaa !== 'undefined' && JotForm.hipaa;
-        if (!window.Sentry && window.FORM_MODE !== 'cardform' && !origin.includes('jotform.pro') && !isHIPAAEnterprise) {
-            const script = document.createElement('script');
-            script.src = 'https://browser.sentry-cdn.com/5.19.0/bundle.min.js';
-            script.integrity = 'sha384-edPCPWtQrj57nipnV3wt78Frrb12XdZsyMbmpIKZ9zZRi4uAxNWiC6S8xtGCqwDG';
-            script.crossOrigin = 'anonymous';
-
-            script.addEventListener('load', function() {
-                if (window.Sentry) {
-                    window.Sentry.init({
-                        // ignore common browser extensions, plugins and only allow jotform domain errors
-                        dsn: 'https://fc3f70667fb1400caf8c27ed635bd4e1@sentry.io/4142374',
-                        enviroment: 'production',
-                        whitelistUrls: [
-                            /https?:\/\/.*jotform\.com/,
-                            /https?:\/\/cdn\.jotfor\.ms/
-                        ],
-                        integrations: [
-                          new Sentry.Integrations.GlobalHandlers({
-                            onunhandledrejection: false
-                          })
-                        ],
-                        denyUrls: [
-                            // Facebook flakiness
-                            /graph\.facebook\.com/i,
-                            // Facebook blocked
-                            /connect\.facebook\.net\/en_US\/all\.js/i,
-                            // Woopra flakiness
-                            /eatdifferent\.com\.woopra-ns\.com/i,
-                            /static\.woopra\.com\/js\/woopra\.js/i,
-                            // Chrome extensions
-                            /extensions\//i,
-                            /^chrome:\/\//i,
-                            // Other plugins
-                            /127\.0\.0\.1:4001\/isrunning/i, // Cacaoweb
-                            /webappstoolbarba\.texthelp\.com\//i,
-                            /metrics\.itunes\.apple\.com\.edgesuite\.net\//i,
-                            /tinymce/i
-                        ],
-                        ignoreErrors: [
-                            // Random plugins/extensions
-                            'top.GLOBALS',
-                            // See: http://blog.errorception.com/2012/03/tale-of-unfindable-js-error. html
-                            'originalCreateNotification',
-                            'canvas.contentDocument',
-                            'MyApp_RemoveAllHighlights',
-                            'http://tt.epicplay.com',
-                            'Can\'t find variable: ZiteReader',
-                            'jigsaw is not defined',
-                            'ComboSearch is not defined',
-                            'http://loading.retry.widdit.com/',
-                            'atomicFindClose',
-                            // Facebook borked
-                            'fb_xd_fragment',
-                            // ISP "optimizing" proxy - `Cache-Control: no-transform` seems to
-                            // reduce this. (thanks @acdha)
-                            // See http://stackoverflow.com/questions/4113268
-                            'bmi_SafeAddOnload',
-                            'EBCallBackMessageReceived',
-                            // See http://toolbar.conduit.com/Developer/HtmlAndGadget/Methods/JSInjection.aspx
-                            'conduitPage',
-                            'tinymce',
-                            // Common error caused by test software on a specific chrome version
-                            'GetScreenshotBoundingBox',
-                            'Can\'t execute code from a freed script',
-                            'for=',
-                            'JotForm.handleIFrameHeight',
-                            // See https://stackoverflow.com/questions/49384120
-                            'ResizeObserver loop limit exceeded',
-                            // variables that does not originate from our codebase
-                            'SB_ModifyLinkTargets',
-                            'RegisterEvent'
-                        ],
-                        beforeSend: function(event){
-                            // whitelistUrls paramater is unreliable
-                            // do not collect errors from source code embed
-                            if(window.parent === window && event.request && event.request.url &&
-                            !event.request.url.match(/(https?:\/\/.*jotform\.com)|(https?:\/\/cdn\.jotfor\.ms)/)){
-                                return null;
-                            }
-
-                            // Don't log errors that comes from the facebook browser
-                            if (window.navigator.userAgent.indexOf('FB_IAB') !== -1) {
-                                return null;
-                            }
-
-                            return event;
-                        }
+            if (isCardformWithWelcome || isPDFFormWithWelcome) {
+                const startButtonQuery = isPDFFormWithWelcome ? '.js-pdfStartFilling' : '#jfCard-welcome-start';
+                const startButton = document.querySelector(startButtonQuery);
+                if (startButton) {
+                    startButton.addEventListener('click', () => {
+                        window.AgentInitializer.init(helperAgentProps);
                     });
                 }
-            });
-            document.querySelector('head').appendChild(script);
+            }
+            else {
+                window.AgentInitializer.init(helperAgentProps);
+            }
         }
     },
+
     getAPIEndpoint: function() {
         if(!this.APIUrl){
             this.setAPIUrl();
@@ -1105,7 +1027,6 @@ var JotForm = {
                 }
 
                 trackExecution('init-started');
-                // this.initSentry();
 
                 if (window.FS) {
                   window.onFSError = () => this.initEmbeddedAgent();
