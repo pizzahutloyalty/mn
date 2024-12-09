@@ -798,8 +798,9 @@ var JotForm = {
             }
 
             if (window.formHelperAgentProp) {
-                const {agentHeaderBackgroundColor, avatarIconLink, ...rest} = JSON.parse(window.formHelperAgentProp);
-                helperAgentProps = {...helperAgentProps, background: agentHeaderBackgroundColor, avatarURL:avatarIconLink, ...rest}
+                const {agentHeaderBackgroundColor, avatarIconLink, agentRenderURL, ...rest} = JSON.parse(window.formHelperAgentProp);
+                putChatIDInForm(new URL(agentRenderURL).origin);
+                helperAgentProps = {...helperAgentProps, background: agentHeaderBackgroundColor, avatarURL:avatarIconLink, agentRenderURL, ...rest}
             }
 
             window.agentInitialized = true;
@@ -17050,21 +17051,6 @@ var JotForm = {
                         }));
                     }
 
-                    if (!window.agentHelperChatID) {
-                        var agentHelperIframe = document.getElementById('form-agent-helper');
-                        if (agentHelperIframe) {
-                            var iframeWindow = agentHelperIframe.contentWindow;
-                            var agentHelperID = iframeWindow.chatID;
-                            if (agentHelperID) {
-                                form.appendChild(createHiddenInputElement({
-                                    name: 'agentHelperChatID',
-                                    value: agentHelperID
-                                }));
-                                window.agentHelperChatID = agentHelperID;
-                            }
-                        }   
-                    }
-
                     if (window.location.href.includes('agentImplementationID') && !window.agentImplementationID) {
                         var agentQueryString = window.location.search;
                         var agentUrlParams = new URLSearchParams(agentQueryString);
@@ -17222,8 +17208,7 @@ var JotForm = {
                 }
 
                 var numberOfInputs = form.querySelectorAll('.form-all input, select').length;
-                var pciLimit = ['bluesnap', 'cybersource'].includes(JotForm.payment) && numberOfInputs > 1000;
-                if (numberOfInputs > 3000 || pciLimit){ // to bypass max_input_vars - 3000 limit
+                if (numberOfInputs > 4500){ // to bypass max_input_vars - 4500 limit for v3, 9K for pci
                   JotForm.removeNonselectedProducts(form);
                 }
 
@@ -22057,3 +22042,20 @@ function generateUUID(formID) {
 
 // We have to put this event because it's the only way to catch FB load
 window.fbAsyncInit = JotForm.FBInit.bind(JotForm);
+
+function putChatIDInForm(agentOrigin) {
+  window.addEventListener('message', ({ data, origin }) => {
+      if (origin !== agentOrigin || !data || typeof data.chatID !== 'string' || !data.chatID) return;
+
+      try {
+        const agentHelperID = data.chatID;;
+        const agentHelperInput = createHiddenInputElement({ name: 'agentHelperChatID', value: agentHelperID });
+        const form = document.querySelector('form.jotform-form');
+        if (!form) return;
+        form.appendChild(agentHelperInput);
+        window.agentHelperChatID = agentHelperID;
+      } catch (e) {
+        console.error(e);
+      }
+  });
+}
