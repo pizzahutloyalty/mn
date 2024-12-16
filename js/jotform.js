@@ -799,6 +799,10 @@ var JotForm = {
 
             if (window.formHelperAgentProp) {
                 const {agentHeaderBackgroundColor, avatarIconLink, agentRenderURL, ...rest} = JSON.parse(window.formHelperAgentProp);
+                if (!rest.loggedInUser || (rest.loggedInUser && !rest.loggedInUser.name && !rest.loggedInUser.username)) {
+                  nameInputListenerForAssistantTooltip();
+                };
+
                 putChatIDInForm(new URL(agentRenderURL).origin);
                 helperAgentProps = {...helperAgentProps, background: agentHeaderBackgroundColor, avatarURL:avatarIconLink, agentRenderURL, ...rest}
             }
@@ -812,13 +816,15 @@ var JotForm = {
                 const startButton = document.querySelector(startButtonQuery);
                 if (startButton) {
                     startButton.addEventListener('click', () => {
-                        window.AgentInitializer.init(helperAgentProps);
+                        const agentMethods = window.AgentInitializer.init(helperAgentProps);
+                        window.embeddedAgentMethods = agentMethods;
                     });
                 }
             }
             else {
-                window.AgentInitializer.init(helperAgentProps);
-            }
+                const agentMethods = window.AgentInitializer.init(helperAgentProps);
+                window.embeddedAgentMethods = agentMethods;
+              }
         }
     },
 
@@ -16583,7 +16589,9 @@ var JotForm = {
 
         JotForm.nextPage = false;
         input = $(input);
-
+        if (window.AgentInitializer && window.agentInitialized && window.embeddedAgentMethods) {
+            window.embeddedAgentMethods.setTooltip('You need help with that?', { withPulse: true, timeout: 5000 });
+        }
         if (input.errored) {
             return false;
         }
@@ -16728,6 +16736,10 @@ var JotForm = {
             return;
         }
 
+        if (JotForm.isPaymentSelected() && container.select('.form-subproduct-quantity.form-validation-error').length > 0) {
+            return;
+        }
+        
         if (
             JotForm.paymentFields.indexOf($(container).readAttribute('data-type')) > -1 &&
             typeof PaymentStock !== 'undefined' &&
@@ -21553,6 +21565,14 @@ function isIframeEmbedFormPure() {
     }
 }
 
+function isIframeEmbedFormForCanva() {
+    try {
+        return document.referrer === "https://canva-embed.com/";
+    } catch (e) {
+        return false;
+    }
+}
+
 function callIframeHeightCaller() {
     if (!JotForm.iframeHeightCaller) {
         return;
@@ -21568,7 +21588,10 @@ if(isIframeEmbedForm()) {
 }
 
 if (isIframeEmbedFormPure()) {
-    document.querySelector('html').addClassName('isEmbeded');
+    var formHtmlElement = document.querySelector('html').addClassName('isEmbeded');
+    if (isIframeEmbedFormForCanva()) {
+        formHtmlElement.addClassName('canvaEmbeded');
+    }
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('img[loading=lazy]').forEach(function(image) {
             image.addEventListener('load', callIframeHeightCaller);
@@ -22058,4 +22081,48 @@ function putChatIDInForm(agentOrigin) {
         console.error(e);
       }
   });
+}
+
+function nameInputListenerForAssistantTooltip() {
+  try {
+    const nameField = document.querySelector('li[data-type="control_fullname"]');
+    if (!nameField) {
+        return;
+    }
+
+    const questionID = nameField.getAttribute('id').replace('id_', '');
+    const firstNameField = nameField.querySelector(`#first_${questionID}`);
+    let timeoutID;
+
+    const focusHandler = () => {
+        clearTimeout(timeoutID);
+    }
+
+    const blurHandler = (event) => {
+        clearTimeout(timeoutID);
+        timeoutID = setTimeout(() => {
+            const firstName = event.target.value;
+            if (!firstName) {
+              return;
+            }
+            const capitalizedFirstName = `${firstName.charAt(0).toUpperCase()}${firstName.slice(1)}`;
+            if (window.embeddedAgentMethods) {
+                const firstNameWord = capitalizedFirstName.trim().split(' ')[0];
+                window.embeddedAgentMethods.setTooltip(`Hey ${firstNameWord}! `, { timeout: 4000, withPulse: true, type: 'greetingGuestUser' });
+
+                setInterval(() => {
+                    window.embeddedAgentMethods.setTooltip(`Hey ${firstNameWord}! `, { timeout: 4000, withPulse: true, type: 'greetingGuestUser' });
+                }, 60000);
+                window.embeddedAgentMethods.postMessageToAgent({ action: 'greet-user', text: firstNameWord }, '*');
+            }
+            firstNameField.removeEventListener('blur', blurHandler);
+            firstNameField.removeEventListener('focus', focusHandler);    
+        }, 5000);
+    }
+    firstNameField.addEventListener('blur', blurHandler);
+    firstNameField.addEventListener('focus', focusHandler);
+  }
+  catch (e)  {
+      console.log(e);
+  }
 }
