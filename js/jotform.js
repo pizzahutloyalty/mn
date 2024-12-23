@@ -542,6 +542,7 @@ var JotForm = {
           id: generateUUID(formId),
           createdAt: new Date().getTime(),
           validationAttempts: 0,
+          submitter: originalEvent.submitter || null,
           submitted: null,
           submittedAt: null,
           listeners: {},
@@ -585,6 +586,7 @@ var JotForm = {
                 stopImmediatePropagation() { logEventMethod('stopImmediatePropagation'); },
                 composedPath() { logEventMethod('composedPath'); },
                 get valid() { return _valid },
+                get submitter() { return observerSubmitEvent.submitter },
                 get eventId() { return observerSubmitEvent.id },
                 set valid(status) {
                   if (typeof status !== 'boolean' && status !== null) return;
@@ -10483,6 +10485,7 @@ var JotForm = {
     handleDonationAmount: function () {
         // donation amount input
         var donationField = JotForm.donationField = document.querySelector('input[id*="_donation"]');
+        const preventChangeReadonly = donationField.hasAttribute('readonly') || false;
         // default
         JotForm.paymentTotal = donationField.value || 0;
         // observe changes
@@ -10505,12 +10508,19 @@ var JotForm = {
         // }
         donationField.addEventListener('input', function () {
             var donationRegex = new RegExp(/^([0-9]{0,15})(\.[0-9]{0,2})?$/);
+            if (preventChangeReadonly) return;
             if (this.value.match(donationRegex)) {
                 JotForm.paymentTotal = prevInput = this.value;
             } else {
                 JotForm.paymentTotal = this.value = prevInput;
             }
         });
+        // if change readonly from inspect, it will activate readonly again
+        if (preventChangeReadonly){
+            donationField.addEventListener('keydown', function () {
+                donationField.readOnly = true;
+            });
+        }
         // if donation gets its amount from a calculation widget
         if (donationField.getAttribute('data-custom-amount-field') > 0) {
             JotForm.donationSourceField = document.querySelector(`#input_${donationField.getAttribute('data-custom-amount-field')}`);
@@ -16590,7 +16600,7 @@ var JotForm = {
         JotForm.nextPage = false;
         input = $(input);
         if (window.AgentInitializer && window.agentInitialized && window.embeddedAgentMethods) {
-            window.embeddedAgentMethods.setTooltip('You need help with that?', { withPulse: true, timeout: 5000 });
+            window.embeddedAgentMethods.setTooltip('You need help with that?', { withPulse: true, pulseType: 'error', timeout: 5000 });
         }
         if (input.errored) {
             return false;
@@ -22108,11 +22118,12 @@ function nameInputListenerForAssistantTooltip() {
             const capitalizedFirstName = `${firstName.charAt(0).toUpperCase()}${firstName.slice(1)}`;
             if (window.embeddedAgentMethods) {
                 const firstNameWord = capitalizedFirstName.trim().split(' ')[0];
-                window.embeddedAgentMethods.setTooltip(`Hey ${firstNameWord}! `, { timeout: 4000, withPulse: true, type: 'greetingGuestUser' });
 
-                setInterval(() => {
-                    window.embeddedAgentMethods.setTooltip(`Hey ${firstNameWord}! `, { timeout: 4000, withPulse: true, type: 'greetingGuestUser' });
-                }, 60000);
+                window.embeddedAgentMethods.showUserGreetingTooltip({
+                  userName: firstNameWord,
+                  interval: 60000,
+                  timeoutForEachTooltip: 4000
+                });
                 window.embeddedAgentMethods.postMessageToAgent({ action: 'greet-user', text: firstNameWord }, '*');
             }
             firstNameField.removeEventListener('blur', blurHandler);
