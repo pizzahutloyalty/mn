@@ -362,6 +362,7 @@ var JotForm = {
     disableSubmitButtonMessage: '',
     isConditionDebugMode: false,
     totalLogCount: 0,
+    firstUrlPrefillCondition: false,
     isValidJotform(form) {
       if (!(form instanceof HTMLFormElement)) return false;
       if (!form.id) return false;
@@ -369,294 +370,294 @@ var JotForm = {
       return true;
     },
     EventObserver: (function intitalizeFormEventObserver() {
-      const searchParams = new URLSearchParams(window.location.search);
-      const isDebugEnabled = searchParams.get('debug') === '1';
-      const isObserverEnabledByUrlParam = searchParams.get('eventObserver') === '1';
+        const searchParams = new URLSearchParams(window.location.search);
+        const isDebugEnabled = searchParams.get('debug') === '1';
+        const isObserverEnabledByUrlParam = searchParams.get('eventObserver') === '1';
 
-      // feature flag --> window.enableEventObserver is set in buildsource.js
-      if (!(window.enableEventObserver || isObserverEnabledByUrlParam)) return null;
+        // feature flag --> window.enableEventObserver is set in buildsource.js
+        if (!(window.enableEventObserver || isObserverEnabledByUrlParam)) return null;
 
-      if(getQuerystring('offline_forms') === 'true') return null;
+        if(getQuerystring('offline_forms') === 'true') return null;
 
-      const CONST = {
-        SUBMIT_OBSERVER_NAME: 'submitObserverHandler'
-      };
+        const CONST = {
+            SUBMIT_OBSERVER_NAME: 'submitObserverHandler'
+        };
       
-      // EventObserver will overwrite "addEventListener" & "submit". Save original methods
-      const _originalFormAddEventListener = HTMLFormElement.prototype.addEventListener;
-      const _originalFormSubmitMethod = HTMLFormElement.prototype.submit;
+        // EventObserver will overwrite "addEventListener" & "submit". Save original methods
+        const _originalFormAddEventListener = HTMLFormElement.prototype.addEventListener;
+        const _originalFormSubmitMethod = HTMLFormElement.prototype.submit;
     
-      // create EventObserver
-      /** @type {observer.EventObserver} */
-      const EventObserver = {
-        [CONST.SUBMIT_OBSERVER_NAME]: null
-      };
-    
-      /** @type {observer.extendedAddEventListener} */
-      function extendedAddEventListner(eventKey, handler, options) {
-        // only extend new addEventListner to JOTFORM forms
-        // do not include CONST.SUBMIT_OBSERVER_NAME
-        if (isDebugEnabled) console.log({ eventKey, handler, options });
-        if (!JotForm.isValidJotform(this) || handler.name === CONST.SUBMIT_OBSERVER_NAME) {
-          _originalFormAddEventListener.apply(this, arguments);
-          return;
-        }
-        const newStack = new Error().stack;
-        const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
-        const name = (() => {
-          // anon functions from prototype.js will be named "responder"
-          if (handler.name && handler.name !== 'responder') return handler.name;
-          if (!stack) return 'anon-noStack';
-          if (stack.includes('for-widgets-server.js')) return 'forWidgetServer';
-          if (stack.includes('jquery-3.7.1')) return 'jqueryEventWrapper';
-          if (stack.includes('/vendor/maskedinput_')) return 'maskedInputWrapper';
-          return 'anon';
-        })();
-    
-        const order = (() => {
-          if (!options || typeof options === 'boolean') return 0;
-          if (typeof options === 'object' && typeof options.order === 'number') return options.order;
-          return 0;
-        })();
-    
-        const listener = {
-          eventKey,
-          name,
-          handler,
-          stack,
-          order
+        // create EventObserver
+        /** @type {observer.EventObserver} */
+        const EventObserver = {
+           [CONST.SUBMIT_OBSERVER_NAME]: null
         };
     
-        if (!EventObserver[this.id]) {
-          EventObserver[this.id] = {
-            form: this,
-            listeners: [],
-            submit: {},
-            submitDirect: {}
-          };
-        }
-
-        // add addEventListeners to listeners array.
-        EventObserver[this.id].listeners.push(listener);
-      }
-    
-      // Prevent others from bypassing submit process, ie form.submit()
-      /** @type {observer.preventFormSubmitMethod} */
-      function preventFormSubmitMethod() {
-        if (!JotForm.isValidJotform(this)) {
-          _originalFormSubmitMethod.apply(this);
-          return;
-        }
-        const stack = new Error().stack || '';
-        const splitStack = stack.split('    at ');
-        // Log methods calling form.submit()
-        // to avoid possiblility of infinite loops, return void if form.submit() was called by the same function 4 times in a short timespan
-        if (Array.isArray(splitStack) && splitStack.length > 2) {
-            const handlerName = splitStack[3];
-            const formId = this.id;
-            const formObserver = EventObserver[formId];
-            const submitDirect = formObserver.submitDirect[handlerName];
-            const invokedCount = typeof submitDirect === 'number' ? submitDirect + 1 : 0;
-            if (invokedCount > 4) {
-                if (isDebugEnabled) console.log(handlerName, 'Submit count is greater than 4 - returning void');
-                // reset error count and exit (to avoid inifinite loops)
-                window.JotForm.errorCatcherLog({ message: {
-                    stack,
-                    formId: formId,
-                    handler: handlerName
-                }}, 'EventObserver: form.submit() exceeded call amount');
-                formObserver.submitDirect[handlerName] = 0;
+        /** @type {observer.extendedAddEventListener} */
+        function extendedAddEventListner(eventKey, handler, options) {
+            // only extend new addEventListner to JOTFORM forms
+            // do not include CONST.SUBMIT_OBSERVER_NAME
+            if (isDebugEnabled) console.log({ eventKey, handler, options });
+            if (!JotForm.isValidJotform(this) || handler.name === CONST.SUBMIT_OBSERVER_NAME) {
+                _originalFormAddEventListener.apply(this, arguments);
                 return;
             }
-            
-            const submitted = formObserver.submit && Object.values(formObserver.submit).find(submitInstance => Boolean(submitInstance.submitted));
-            if (isDebugEnabled) console.log({ handlerName, invokedCount });
-            if (submitted) {
-                if (isDebugEnabled) console.log('Form submitted. Returning void.');
+            const newStack = new Error().stack;
+            const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
+            const name = (() => {
+                // anon functions from prototype.js will be named "responder"
+                if (handler.name && handler.name !== 'responder') return handler.name;
+                if (!stack) return 'anon-noStack';
+                if (stack.includes('for-widgets-server.js')) return 'forWidgetServer';
+                if (stack.includes('jquery-3.7.1')) return 'jqueryEventWrapper';
+                if (stack.includes('/vendor/maskedinput_')) return 'maskedInputWrapper';
+                return 'anon';
+            })();
+    
+            const order = (() => {
+              if (!options || typeof options === 'boolean') return 0;
+              if (typeof options === 'object' && typeof options.order === 'number') return options.order;
+              return 0;
+            })();
+    
+            const listener = {
+                eventKey,
+                name,
+                handler,
+                stack,
+                order
+            };
+    
+            if (!EventObserver[this.id]) {
+                EventObserver[this.id] = {
+                    form: this,
+                    listeners: [],
+                    submit: {},
+                    submitDirect: {}
+                };
+            }
+
+            // add addEventListeners to listeners array.
+            EventObserver[this.id].listeners.push(listener);
+        }
+    
+        // Prevent others from bypassing submit process, ie form.submit()
+        /** @type {observer.preventFormSubmitMethod} */
+        function preventFormSubmitMethod() {
+            if (!JotForm.isValidJotform(this)) {
+                _originalFormSubmitMethod.apply(this);
                 return;
             }
-        }
-        
-        // form.submit() will now send a new submit event instead of directly submitting the form.
-        if (isDebugEnabled) console.log('form.submit() was called on a jotform form', this, 'calling form.requestSubmit()');
-        this.requestSubmit();
-      }
-
-      // overwrite addEventListener + submit event
-      HTMLFormElement.prototype.addEventListener = extendedAddEventListner;
-      HTMLFormElement.prototype.submit = preventFormSubmitMethod;
-    
-      // util for submit logging
-      /** @type {observer.addLogEvent} */
-      function addLogEvent({ id, stack, info, observerSubmitEvent }) {
-        observerSubmitEvent.log.push({
-          timestamp: new Date().getTime(),
-          id,
-          info,
-          ...(stack ? { stack } : {})
-        });
-      }
-    
-      /** @type {observer.validateSubmitEvent} */
-      function validateObserverSubmitEvent({ id, observerSubmitEvent }) {
-        addLogEvent({ id, observerSubmitEvent, info: 'Validation Started' });
-        observerSubmitEvent.validationAttempts += 1;
-        const formObserver = observerSubmitEvent.formObserver;
-    
-        const invalidEvents = Object.values(observerSubmitEvent.listeners).filter(listener => {
-          if (listener.valid === null || listener.valid) return false;
-          return true;
-        })
-        const noInvalidEvents = invalidEvents.length === 0;
-    
-        const noPreviousSubmits = Object.values(formObserver.submit).filter(submitEvent => {
-          return submitEvent.submitted;
-        }).length === 0;
-    
-        const validSubmit = noInvalidEvents && noPreviousSubmits;
-        if (!validSubmit) {
-          addLogEvent({ id, observerSubmitEvent, info: 'Validation Complete. Invalid Submit.\nNumber of invalid events: ' + invalidEvents.length + '.\nPreviously submitted: ' +  !noPreviousSubmits + '.'});
-          return;
-        }
-        observerSubmitEvent.submitted = true;
-        observerSubmitEvent.submittedAt = new Date().getTime().toString();
-        trackExecution('observerSubmitHandler_validation-passed-submitting-form');
-        addLogEvent({ id, observerSubmitEvent, info: 'Validation Complete. Valid Submit.' });
-        // form.submit() will be called directly.
-        _originalFormSubmitMethod.apply(formObserver.form);
-      }
-
-      // this function will receieve the real submit event and dispatch local "validation" events to the listeners. 
-      /** @type {observer.handlerSubmitEvent} */
-      function eventObserverSubmitHandler(originalEvent, formId) {
-        const formObserver = EventObserver[formId];
-        if (!formObserver) return;
-
-        // stop submit event from invoking POST request
-        originalEvent.preventDefault();
-        const newStack = new Error().stack;
-        const stackTrace = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
-        trackExecution('observerSubmitHandler_received-submit-event');
-        // create Observer's Immutable SubmitEvent.
-        const observerSubmitEvent = {
-          id: generateUUID(formId),
-          createdAt: new Date().getTime(),
-          validationAttempts: 0,
-          submitter: originalEvent.submitter || null,
-          submitted: null,
-          submittedAt: null,
-          listeners: {},
-          log: [],
-          get stack() { return stackTrace },
-          get formObserver() { return formObserver }
-        };
-
-         // add Observer's SubmitEvent to global EventObserver
-         const eventIndex = Object.keys(formObserver.submit).length;
-         formObserver.submit[eventIndex] = observerSubmitEvent;
-
-        // get form submit listeners & add them to Observer's SubmitEvent
-        formObserver.listeners.forEach(function addListener(listener, index) {
-          if (listener.eventKey !== 'submit') return;
-          const listenerName = listener.name + '_' + index;
-    
-          // copy global listener + create new "validation" event for each listener
-          /** @type {observer.listenerInstance} */
-          const createListenerInstance = () => {
-
-            // util to log methods called from listener
-            function logEventMethod(methodName) {
-              const newStack = new Error().stack;
-              const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
-              addLogEvent({ id: listenerName, observerSubmitEvent, info: `${methodName}() invoked`, stack });
-            }
-            let _valid = null;
-            return {
-              name: listenerName,
-              eventKey: listener.eventKey,
-              handler: listener.handler,
-              order: listener.order,
-              get valid() { return _valid },
-              event: {
-                stop() { logEventMethod('stop'); },
-                // add logs to see if listener is calling methods from original submit event
-                // listeners should only use "valid" property
-                preventDefault() { logEventMethod('preventDefault'); },
-                stopPropagation() { logEventMethod('stopPropagation'); },
-                stopImmediatePropagation() { logEventMethod('stopImmediatePropagation'); },
-                composedPath() { logEventMethod('composedPath'); },
-                get valid() { return _valid },
-                get submitter() { return observerSubmitEvent.submitter },
-                get eventId() { return observerSubmitEvent.id },
-                set valid(status) {
-                  if (typeof status !== 'boolean' && status !== null) return;
-                  const newStack = new Error().stack;
-                  const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
-                  if (_valid === status) {
-                    addLogEvent({ id: listenerName, stack, observerSubmitEvent, info: 'valid already set to: ' + status });
+            const stack = new Error().stack || '';
+            const splitStack = stack.split('    at ');
+            // Log methods calling form.submit()
+            // to avoid possiblility of infinite loops, return void if form.submit() was called by the same function 4 times in a short timespan
+            if (Array.isArray(splitStack) && splitStack.length > 2) {
+                const handlerName = splitStack[3];
+                const formId = this.id;
+                const formObserver = EventObserver[formId];
+                const submitDirect = formObserver.submitDirect[handlerName];
+                const invokedCount = typeof submitDirect === 'number' ? submitDirect + 1 : 0;
+                if (invokedCount > 4) {
+                    if (isDebugEnabled) console.log(handlerName, 'Submit count is greater than 4 - returning void');
+                    // reset error count and exit (to avoid inifinite loops)
+                    window.JotForm.errorCatcherLog({ message: {
+                        stack,
+                        formId: formId,
+                        handler: handlerName
+                    }}, 'EventObserver: form.submit() exceeded call amount');
+                    formObserver.submitDirect[handlerName] = 0;
                     return;
-                  }
-                  _valid = status;
-                  addLogEvent({ id: listenerName, observerSubmitEvent, stack, info: 'valid: ' + status });
-                  
-                  if (!observerSubmitEvent.validationAttempts) return;
-                  if (observerSubmitEvent.submitted) return;
-                  validateObserverSubmitEvent({ id: listenerName, observerSubmitEvent });
                 }
-              }
+            
+                const submitted = formObserver.submit && Object.values(formObserver.submit).find(submitInstance => Boolean(submitInstance.submitted));
+                if (isDebugEnabled) console.log({ handlerName, invokedCount });
+                if (submitted) {
+                    if (isDebugEnabled) console.log('Form submitted. Returning void.');
+                    return;
+                }
             }
-          };
-    
-          // add new listenerInstance to Oberserer's SubmitEvent
-          observerSubmitEvent.listeners[listenerName] = createListenerInstance()
-        });
-    
-        // sort listeners by order
-        const orderedEventListeners = Object.values(observerSubmitEvent.listeners).sort((a, z) => {
-          return a.order - z.order;
-        });
-    
-        // Run all Observer's SubmitEvent listeners
-        orderedEventListeners.forEach(listener => {
-          if (typeof listener.handler !== 'function') return;
-    
-          addLogEvent({ id: listener.name, observerSubmitEvent, info: listener.name + ': start' });
+        
+            // form.submit() will now send a new submit event instead of directly submitting the form.
+            if (isDebugEnabled) console.log('form.submit() was called on a jotform form', this, 'calling form.requestSubmit()');
+            this.requestSubmit();
+        }
 
-          try {
-            // pass new validation event to listener
-            listener.handler.call(formObserver.form, listener.event);
-          } catch (error) {
-            addLogEvent({ id: listener.name, observerSubmitEvent,  info: 'Error: Failed in try catch.', stack: String(error) });
-          }
-          addLogEvent({ id: listener.name, observerSubmitEvent, info: listener.name + ': end' });
-        });
+        // overwrite addEventListener + submit event
+        HTMLFormElement.prototype.addEventListener = extendedAddEventListner;
+        HTMLFormElement.prototype.submit = preventFormSubmitMethod;
+    
+        // util for submit logging
+        /** @type {observer.addLogEvent} */
+        function addLogEvent({ id, stack, info, observerSubmitEvent }) {
+            observerSubmitEvent.log.push({
+                timestamp: new Date().getTime(),
+                id,
+                info,
+                ...(stack ? { stack } : {})
+            });
+        }
+    
+        /** @type {observer.validateSubmitEvent} */
+        function validateObserverSubmitEvent({ id, observerSubmitEvent }) {
+            addLogEvent({ id, observerSubmitEvent, info: 'Validation Started' });
+            observerSubmitEvent.validationAttempts += 1;
+            const formObserver = observerSubmitEvent.formObserver;
+    
+            const invalidEvents = Object.values(observerSubmitEvent.listeners).filter(listener => {
+                if (listener.valid === null || listener.valid) return false;
+                return true;
+            });
+            const noInvalidEvents = invalidEvents.length === 0;
+    
+            const noPreviousSubmits = Object.values(formObserver.submit).filter(submitEvent => {
+                return submitEvent.submitted;
+            }).length === 0;
+    
+            const validSubmit = noInvalidEvents && noPreviousSubmits;
+            if (!validSubmit) {
+                addLogEvent({ id, observerSubmitEvent, info: 'Validation Complete. Invalid Submit.\nNumber of invalid events: ' + invalidEvents.length + '.\nPreviously submitted: ' +  !noPreviousSubmits + '.'});
+                return;
+            }
+            observerSubmitEvent.submitted = true;
+            observerSubmitEvent.submittedAt = new Date().getTime().toString();
+            trackExecution('observerSubmitHandler_validation-passed-submitting-form');
+            addLogEvent({ id, observerSubmitEvent, info: 'Validation Complete. Valid Submit.' });
+            // form.submit() will be called directly.
+            _originalFormSubmitMethod.apply(formObserver.form);
+        }
+
+        // this function will receieve the real submit event and dispatch local "validation" events to the listeners. 
+        /** @type {observer.handlerSubmitEvent} */
+        function eventObserverSubmitHandler(originalEvent, formId) {
+            const formObserver = EventObserver[formId];
+            if (!formObserver) return;
+
+            // stop submit event from invoking POST request
+            originalEvent.preventDefault();
+            const newStack = new Error().stack;
+            const stackTrace = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
+            trackExecution('observerSubmitHandler_received-submit-event');
+            // create Observer's Immutable SubmitEvent.
+            const observerSubmitEvent = {
+                id: generateUUID(formId),
+                createdAt: new Date().getTime(),
+                validationAttempts: 0,
+                submitter: originalEvent.submitter || null,
+                submitted: null,
+                submittedAt: null,
+                listeners: {},
+                log: [],
+                get stack() { return stackTrace },
+                get formObserver() { return formObserver }
+            };
+
+            // add Observer's SubmitEvent to global EventObserver
+            const eventIndex = Object.keys(formObserver.submit).length;
+            formObserver.submit[eventIndex] = observerSubmitEvent;
+
+            // get form submit listeners & add them to Observer's SubmitEvent
+            formObserver.listeners.forEach(function addListener(listener, index) {
+                if (listener.eventKey !== 'submit') return;
+                const listenerName = listener.name + '_' + index;
+    
+                // copy global listener + create new "validation" event for each listener
+                /** @type {observer.listenerInstance} */
+                const createListenerInstance = () => {
+
+                    // util to log methods called from listener
+                    function logEventMethod(methodName) {
+                        const newStack = new Error().stack;
+                        const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
+                        addLogEvent({ id: listenerName, observerSubmitEvent, info: `${methodName}() invoked`, stack });
+                    }
+                    let _valid = null;
+                    return {
+                        name: listenerName,
+                        eventKey: listener.eventKey,
+                        handler: listener.handler,
+                        order: listener.order,
+                        get valid() { return _valid },
+                        event: {
+                            stop() { logEventMethod('stop'); },
+                            // add logs to see if listener is calling methods from original submit event
+                            // listeners should only use "valid" property
+                            preventDefault() { logEventMethod('preventDefault'); },
+                            stopPropagation() { logEventMethod('stopPropagation'); },
+                            stopImmediatePropagation() { logEventMethod('stopImmediatePropagation'); },
+                            composedPath() { logEventMethod('composedPath'); },
+                            get valid() { return _valid },
+                            get submitter() { return observerSubmitEvent.submitter },
+                            get eventId() { return observerSubmitEvent.id },
+                            set valid(status) {
+                                if (typeof status !== 'boolean' && status !== null) return;
+                                const newStack = new Error().stack;
+                                const stack = newStack ? newStack.split('    at ').splice(2).join('\n') : '';
+                                if (_valid === status) {
+                                    addLogEvent({ id: listenerName, stack, observerSubmitEvent, info: 'valid already set to: ' + status });
+                                    return;
+                                }
+                                _valid = status;
+                                addLogEvent({ id: listenerName, observerSubmitEvent, stack, info: 'valid: ' + status });
+                  
+                                if (!observerSubmitEvent.validationAttempts) return;
+                                if (observerSubmitEvent.submitted) return;
+                                validateObserverSubmitEvent({ id: listenerName, observerSubmitEvent });
+                            }
+                        }
+                    }
+                };
+    
+                // add new listenerInstance to Oberserer's SubmitEvent
+                observerSubmitEvent.listeners[listenerName] = createListenerInstance()
+            });
+    
+            // sort listeners by order
+            const orderedEventListeners = Object.values(observerSubmitEvent.listeners).sort((a, z) => {
+                return a.order - z.order;
+            });
+    
+            // Run all Observer's SubmitEvent listeners
+            orderedEventListeners.forEach(listener => {
+                if (typeof listener.handler !== 'function') return;
+    
+                addLogEvent({ id: listener.name, observerSubmitEvent, info: listener.name + ': start' });
+
+                try {
+                    // pass new validation event to listener
+                    listener.handler.call(formObserver.form, listener.event);
+                } catch (error) {
+                    addLogEvent({ id: listener.name, observerSubmitEvent,  info: 'Error: Failed in try catch.', stack: String(error) });
+                }
+                addLogEvent({ id: listener.name, observerSubmitEvent, info: listener.name + ': end' });
+            });
   
-        // run validateObserverSubmitEvent after calling all listeners
-        validateObserverSubmitEvent({ id: 'Observer', observerSubmitEvent });
-      };
+            // run validateObserverSubmitEvent after calling all listeners
+            validateObserverSubmitEvent({ id: 'Observer', observerSubmitEvent });
+        };
 
-      // Rename 'submitEventHandler' function name to CONST.SUBMIT_OBSERVER_NAME.
-      // CONST.SUBMIT_OBSERVER_NAME will be ignored by new "addEventListener" to recieve the form's original dispatched submit event.
-      Object.defineProperty(eventObserverSubmitHandler, 'name', {
-        enumerable: false,
-        configurable: false,
-        writable: false,
-        value: CONST.SUBMIT_OBSERVER_NAME
-      });
+        // Rename 'submitEventHandler' function name to CONST.SUBMIT_OBSERVER_NAME.
+        // CONST.SUBMIT_OBSERVER_NAME will be ignored by new "addEventListener" to recieve the form's original dispatched submit event.
+        Object.defineProperty(eventObserverSubmitHandler, 'name', {
+            enumerable: false,
+            configurable: false,
+            writable: false,
+            value: CONST.SUBMIT_OBSERVER_NAME
+        });
     
-      EventObserver.getLatestSubmitLog = () => {
-        const form = document.querySelector('form.jotform-form');
-        if (!(form instanceof HTMLFormElement)) return null;
+        EventObserver.getLatestSubmitLog = () => {
+            const form = document.querySelector('form.jotform-form');
+            if (!(form instanceof HTMLFormElement)) return null;
 
-        const formObserver = JotForm.EventObserver[form.id];
-        if (!formObserver || !formObserver.submit || !Object.keys(formObserver.submit).length) return null;
-        const lastInstance = formObserver.submit[Object.keys(formObserver.submit).length - 1];
-        if (!lastInstance) return null;
-        return lastInstance.log;
-      };
+            const formObserver = JotForm.EventObserver[form.id];
+            if (!formObserver || !formObserver.submit || !Object.keys(formObserver.submit).length) return null;
+            const lastInstance = formObserver.submit[Object.keys(formObserver.submit).length - 1];
+            if (!lastInstance) return null;
+            return lastInstance.log;
+        };
 
-      EventObserver[CONST.SUBMIT_OBSERVER_NAME] = eventObserverSubmitHandler;
-      return EventObserver;
+        EventObserver[CONST.SUBMIT_OBSERVER_NAME] = eventObserverSubmitHandler;
+        return EventObserver;
     })(),
     encryptAll  : function(e, callback) {
         e.stop();
@@ -1506,6 +1507,7 @@ var JotForm = {
                 this.handleSignatureEvents();
                 this.handleSignSignatureInputs();
                 this.handleFITBInputs();
+                this.setupFormSettledEvent();
                 if (JotForm.newDefaultTheme || JotForm.extendsNewTheme) {
                     // createNewComponent(data-type, function).render()
                     // createNewComponent({ selector: '.form-radio + label', type: 'field' }, this.initRadioInputV2).render();
@@ -5352,6 +5354,7 @@ var JotForm = {
 
         setTimeout(function(){
             if(!(document.getElementById('draftID'))){
+                JotForm.firstUrlPrefillCondition = false;
                 JotForm.runAllConditions();
             }
         }, 1500);
@@ -6185,8 +6188,13 @@ var JotForm = {
                 if (document.querySelector('#id_' + field).triggerEvent && !dontTrigger && dataChanged) document.querySelector('#id_' + field).triggerEvent('change');
             } else if (type == "select") {
                 if (document.querySelector('#input_' + field)) {
-                    document.querySelector('#input_' + field).value = defaultValue;
-                    if (document.querySelector('#input_' + field).triggerEvent && !dontTrigger) document.querySelector('#input_' + field).triggerEvent('change');
+                    if (!JotForm.firstUrlPrefillCondition && !document.querySelector('#input_' + field).value) {
+                        document.querySelector('#input_' + field).value = defaultValue;
+                    } else if (JotForm.firstUrlPrefillCondition) {
+                        document.querySelector('#input_' + field).value = defaultValue;
+                        if (document.querySelector('#input_' + field).triggerEvent && !dontTrigger) document.querySelector('#input_' + field).triggerEvent('change');
+                    }
+                    JotForm.firstUrlPrefillCondition = true;
                 } else { //select matrices
                     document.querySelector("#id_" + field).querySelectorAll('select').forEach(function (element) {
                         if (element.getAttribute('data-component') !== 'mixed-dropdown') {
@@ -17462,7 +17470,7 @@ var JotForm = {
                 }
             });
             JotForm.encryptAll(e, function(submitForm) {
-                if (submitForm) {
+                if (submitForm || JotForm.EventObserver) {
                     // Check if there are conditions for redirection
                     if (Object.keys(redirectConditions).length > 0) {
                         appendHiddenInput('redirectConditions', JSON.stringify(redirectConditions));
@@ -17674,11 +17682,27 @@ var JotForm = {
             }
 
 
+            // Fill In The Blanks Validation / "control_inline"
             if (JotForm.getContainer(input).getAttribute('data-type') === "control_inline" && !deep) {
-                var validatedFitbInputs = JotForm.getContainer(input).querySelectorAll('input[class*="validate"],select[class*="validate"]');
-                if (Array.from(validatedFitbInputs).map(function (subInput) {
-                    return subInput.validateInput ? subInput.validateInput(true) : input.validateInput(true);
-                }).every(function(e) { return e; })) {
+                const allInputs = JotForm.getContainer(input).querySelectorAll('input[class*="validate"],select[class*="validate"]');
+                const isEveryInputValid = Array.from(allInputs).every((element) => {
+                    // handle validation for Fill In The Blanks - Select Elements
+                    if (element instanceof HTMLSelectElement) {
+                        const placeHolderText = element.ariaLabel;
+                        const options = Array.from(element.querySelectorAll('option'));
+                        const selectedOption = options.find(option => Boolean(option.value && option.selected));
+                        if (!selectedOption) {
+                            return JotForm.errored(element, JotForm.texts.required);
+                        }
+                        const selectedOptionIsFirst = options.indexOf(selectedOption) === 0;
+                        // current selected option is placeholder. Normally "Please select"
+                        if (selectedOptionIsFirst && selectedOption.value === placeHolderText) {
+                            return JotForm.errored(element, JotForm.texts.required);
+                        }
+                    }
+                    return element.validateInput ? element.validateInput(true) : input.validateInput(true)
+                });
+                if (isEveryInputValid) {
                     return JotForm.corrected(input);
                 }
                 return false;
@@ -19787,6 +19811,9 @@ var JotForm = {
 
             if (typeof(script.addEventListener) != 'undefined') {
                 script.addEventListener('load', callback, false);
+                script.addEventListener('error', function() {
+                    JotForm.errorCatcherLog({ message: { src: script.src }}, 'JOTFORM_JS_LOAD_SCRIPT_ERROR');
+                });
             } else {
                 //for IE8
                 var handleScriptStateChangeIE8 = function () {
@@ -20764,6 +20791,31 @@ var JotForm = {
     isLivePrefillToken: function(token) {
         if (!token) return false;
         return window.JotForm.livePrefillEnabled && token.length === 36 && JotForm.livePrefillTokenSuffixes.includes(token.slice(-4));
+    },
+
+    setupFormSettledEvent: () => {
+      const isPrefill = !!JotForm.getPrefillToken();
+      const isSACL = !!(window.JFForm && window.JFForm.draftID);
+      let count = 0 + Number(isSACL) + Number(isPrefill);
+
+      const checkIsFormSetteled = () => {
+        if (count !== 0) {
+          count--;
+          return;
+        };
+        document.dispatchEvent(new Event('FormSettled'));
+        window.parent.postMessage('formSettled', '*');
+        document.removeEventListener('PrefillCompleted', checkIsFormSetteled);
+        document.removeEventListener('SACLCompleted', checkIsFormSetteled);
+      }
+
+      if (isPrefill) {
+        document.addEventListener('PrefillCompleted', checkIsFormSetteled);
+      }
+      if (isSACL) {
+        document.addEventListener('SACLCompleted', checkIsFormSetteled);
+      }
+      checkIsFormSetteled();
     },
 
     initPrefills: function() {
