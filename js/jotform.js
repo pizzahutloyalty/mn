@@ -1,7 +1,7 @@
+/* eslint-disable no-undef */
 /**
  * JotForm Form object
  */
-
 var JotForm = {
     /**
      * JotForm domain
@@ -480,7 +480,12 @@ var JotForm = {
         
             // form.submit() will now send a new submit event instead of directly submitting the form.
             if (isDebugEnabled) console.log('form.submit() was called on a jotform form', this, 'calling form.requestSubmit()');
-            this.requestSubmit();
+            if (typeof window.HTMLFormElement.prototype.requestSubmit === 'function') {
+                this.requestSubmit();
+            } else {    
+                _originalFormSubmitMethod.call(this)
+            }
+            
         }
 
         // overwrite addEventListener + submit event
@@ -1038,6 +1043,14 @@ var JotForm = {
 
                 trackExecution('init-started');
 
+                // bugfix: If user goes back to form after submit, submit button may be stuck on please wait.
+                // performance.getEntriesByType('navigation') can determine if page was loaded from cache
+                const navigationPerformanceEntry =  performance && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+                const pageType = navigationPerformanceEntry && navigationPerformanceEntry.type;
+                if (pageType === "back_forward") {
+                    JotForm.enableButtons();
+                }
+
                 if (window.FS) {
                   window.onFSError = () => this.initEmbeddedAgent();
                   window._fs_ready = () => {
@@ -1280,6 +1293,14 @@ var JotForm = {
                 this.getDefaults();
                 if(this.noJump) {
                     window.parent.postMessage("removeIframeOnloadAttr", '*');
+                }
+
+                if(getQuerystring('itemCatalog') === '1') {
+                    const hasPaymentInLegacy = Boolean(document.querySelector('[data-payment="true"]'));
+                    const hasPaymentInCard = Boolean(document.querySelector('[data-payment="newpayment"]'));
+                    if (hasPaymentInLegacy || hasPaymentInCard) {
+                        this.loadStyleSheet('../css/styles/payment/payment_ai_catalog.css');
+                    }
                 }
 
                 var inputSimpleFpc = document.querySelector('input[name="simple_fpc"]');
@@ -1538,6 +1559,13 @@ var JotForm = {
                 // if there is a donation field
                 if (document.querySelector('input[id*="_donation"]')) {
                     this.handleDonationAmount();
+                }
+                // if there is a custom price field for subscription
+                if (document.querySelector('input[id*="_custom_price"]')
+                    && window.paymentType === 'subscription'
+                    && typeof this.validateCustomPriceField !== 'undefined'
+                ) {
+                    this.validateCustomPriceField();
                 }
                 //disable submit if nosubmit=true on request parameters
                 if (getQuerystring('nosubmit')) {
@@ -2242,7 +2270,9 @@ var JotForm = {
                 return height;
             }
             window.parent.postMessage('setHeight:' + height + ':' + form.id, '*');
-            this.postHeightForOEmbed(height);
+            if (typeof this.postHeightForOEmbed !== "undefined") {
+                this.postHeightForOEmbed(height);
+            }
         }
     },
     fixIESubmitURL: function () {
@@ -6532,8 +6562,8 @@ var JotForm = {
             return "";
         }
         let h = "";
-        const hourElement = document.querySelector(`#hour_${id}`)
-        const ampmElement = document.querySelector(`#ampm_${id}`)
+        const hourElement = document.querySelector(`#input_${id}_hourSelect`)
+        const ampmElement = document.querySelector(`#input_${id}_ampm`)
         if (ampmElement) {
             if (hourElement) {
                 h = hourElement.value;
@@ -6551,7 +6581,7 @@ var JotForm = {
                 date += "T" + ((h.length == 1 ? "0" + h : h) || "00");
             }
         }
-        const minElement = document.querySelector(`#min_${id}`);
+        const minElement = document.querySelector(`#input_${id}_minuteSelect`);
         if (minElement) {
             date += ":" + (minElement.value || "00");
         }
@@ -6642,8 +6672,10 @@ var JotForm = {
                 switch (fieldType) {
                     case "combined":
                         if (['isEmpty', 'isFilled'].include(term.operator)) {
-                            filled = $$('#id_' + term.field + ' input,' + '#id_' + term.field + ' select').collect(function (e) {
-                                return e.getAttribute('type') === 'checkbox' || e.getAttribute('type') === 'radio' ? (e.checked ? e.value : '') : e.value;
+                            filled = $$('#id_' + term.field + ' input,' + '#id_' + term.field + ' select')
+                                .filter(e => e.getAttribute('type') !== 'hidden')
+                                .collect(function (e) {
+                                    return e.getAttribute('type') === 'checkbox' || e.getAttribute('type') === 'radio' ? (e.checked ? e.value : '') : e.value;
                             }).any();
 
                             if (JotForm.checkValueByOperator(term.operator, term.value, filled)) {
@@ -6766,13 +6798,13 @@ var JotForm = {
                                 if(term.operator === "equalDay" || term.operator === "notEqualDay") {
                                     termValue = JotForm.getDayOfWeek(JotForm.strToDate(year+"-"+month+"-"+day));
                                 } else {
-                                    termValue = year+"-"+month+"-"+day;
+                                    termValue = JotForm.getDateValue(anotherField);
                                 }
 
                             }
 
-                            if (['equalDate', 'notEqualDate', 'after'].include(term.operator)) {
-                                if (JotForm.checkValueByOperator(term.operator, JotForm.strToDate(termValue), JotForm.strToDate(value.split('T')[0]))) {
+                            if (['equalDate', 'notEqualDate', 'before', 'after'].include(term.operator)) {
+                                if (JotForm.checkValueByOperator(term.operator, JotForm.strToDate(termValue), JotForm.strToDate(value))) {
                                     any = true;
                                 } else {
                                     all = false;
@@ -7777,6 +7809,17 @@ var JotForm = {
 
     widgetsAsCalculationOperands: [],
 
+    requireWidget: function (qid, req) {
+        var referrer = document.getElementById("customFieldFrame_" + qid) ? document.getElementById("customFieldFrame_" + qid).src : false;
+        if (referrer) {
+            var frame = (navigator.userAgent.indexOf("Firefox") != -1 && typeof getIframeWindow !== 'undefined') ? getIframeWindow(window.frames["customFieldFrame_" + qid]) : window.frames["customFieldFrame_" + qid];
+            var isFrameXDready = (!$("customFieldFrame_" + qid).hasClassName('frame-xd-ready') && !$("customFieldFrame_" + qid).retrieve('frame-xd-ready')) ? false : true;
+            if (frame && isFrameXDready) {
+                XD.postMessage(JSON.stringify({type: 'required', qid, req}), referrer, frame);
+            }
+        }
+    },
+    
     /*
      * Require or Unrequire a field
      */
@@ -7865,6 +7908,10 @@ var JotForm = {
                 el.addClassName('validate[' + validations.join(',') + ']');
             }
             JotForm.setFieldValidation(el);
+
+            if (JotForm.getInputType(qid) == 'widget'){
+                JotForm.requireWidget(qid, req);
+            }
         });
 
         // signature
@@ -9906,9 +9953,11 @@ var JotForm = {
         }
 
         const ignoreFields = ['time', 'datetime', 'text'];
+        const ignoreFieldsPayment = ignoreFields.slice(0, -1); // text prevents 'get price from' from working #20174771
+        const ignoreFieldsList = Boolean(JotForm.payment || window.paymentType) ? ignoreFieldsPayment : ignoreFields;
         const operands = (calc.operands && calc.operands.split(',')) || [];
         const baseFieldsForLoop = (calc.baseField && calc.baseField.split(',')) || [];
-        const ignoreFieldCalculationLoopCheck = Boolean(([...baseFieldsForLoop, ...operands]).find(operand => ignoreFields.includes(JotForm.getInputType(operand))));
+        const ignoreFieldCalculationLoopCheck = Boolean(([...baseFieldsForLoop, ...operands]).find(operand => ignoreFieldsList.includes(JotForm.getInputType(operand))));
         const checkCalculationInfiniteLoop = this.loopMapExist || ignoreFieldCalculationLoopCheck;
         if (checkCalculationInfiniteLoop && (infiniteLoop() || calculationInfiniteLoop())) {
             if (JotForm.isConditionDebugMode) {
@@ -10485,7 +10534,27 @@ var JotForm = {
 
         });
     },
-
+    /*
+     * Handle subscription payment custom price field
+     */
+    validateCustomPriceField: function () {
+        var customPrice = document.querySelectorAll('input[id*="_custom_price"]');
+        if (customPrice && customPrice.length > 0) {
+            customPrice.forEach(function (element) {
+                var preventChangeReadonly = element.hasAttribute('readonly') || false;
+                element.addEventListener('input', function () {
+                    if (preventChangeReadonly) {
+                        return;
+                    }
+                });
+                if (preventChangeReadonly) {
+                    element.addEventListener('keydown', function () {
+                        element.readOnly = true;
+                    });
+                }
+            });
+        }
+    },
     /*
      * Handles payment donations
      */
@@ -11549,11 +11618,6 @@ var JotForm = {
         ) {
             document.querySelector('.form-payment-discount').remove();
         }
-        /* //* clean subs amount area
-        if(document.querySelector('.form-payment-recurringpayments .form-payment-label') && document.querySelector('.form-payment-amount')){
-            document.querySelector('.form-payment-amount').remove();
-            document.querySelector('.form-payment-recurringpayments .form-payment-label').style.display = 'flex';
-        } */
         $H(prices).each(function (pair) {
             var subproduct = false;  // is this a subproduct?
             var parentProductKey;    // subproduct's parent key (see http://www.jotform.com/help/264-Create-Sub-Products-Based-on-a-Product-Option)
@@ -11986,7 +12050,7 @@ var JotForm = {
             }
 
             // prepare subscription discount texts and values
-            if (window.paymentType === 'subscription' && document.getElementById(pair.key).checked) {
+            if (window.paymentType === 'subscription' && pair.key && document.getElementById(pair.key) && document.getElementById(pair.key).checked) {
                 function getDiscountedVal(val, firstOrAll) {
                     if (rate && type && discount[2]) {
                         var reduce = type === 'fixed' ? rate : roundAmount(((rate / 100) * parseFloat(val)));
@@ -12004,7 +12068,7 @@ var JotForm = {
                     return val;
                 }
 
-                if (pair.value.firstPaymentVal) {
+                if (pair.value.firstPaymentVal || pair.value.firstPaymentPrice === 'custom') {
                     if ($(pair.key + '_custom_first_payment_price')) {
                         firstPaymentVal = $(pair.key + '_custom_first_payment_price').getValue();
                     } else {
@@ -12019,28 +12083,30 @@ var JotForm = {
                     recurringVal = getDiscountedVal(recurringVal, 'all');
                 }
 
-                var recurPaymentContainer = document.querySelector('.form-payment-recurringpayments');
+                const recurPaymentContainer = document.querySelector('.form-payment-subscriptionprices');
+                if (recurPaymentContainer) {
+                    const paymentUtils = new PaymentUtils();
+                    // reset prices
+                    const amountEl = document.querySelectorAll('.form-payment-amount');
+                    if (amountEl.length > 0) { amountEl.forEach(e => e.remove()); }
+                    const totalText = document.querySelector('.form-payment-total');
+                    if (totalText) { totalText.remove(); }
 
-                if (recurPaymentContainer && recurPaymentDiscount) {
-                    var discountHTML = recurPaymentContainer.innerHTML.replace(/Total|Total:/, 'Discount:').replace('payment_recurringpayments', 'discount_recurringpayments').replace('<span>', '<span> - ');
-
-                    var spanEl = document.createElement('span');
-                    spanEl.className = 'form-payment-discount';
-                    spanEl.innerHTML = discountHTML.replace('id="total-text"', '');
-                    JotForm.discounts.container = spanEl;
-
-                    recurPaymentContainer.insertAdjacentElement('beforebegin', JotForm.discounts.container);
-                    // JotForm.discounts.container.down('.form-payment-price > span').prepend('-');
-                    $('discount_recurringpayments').update(parseFloat(recurPaymentDiscount).formatMoney(decimal, dSeparator, tSeparator));
-                }
-
-                /* if (recurPaymentContainer && (recurPaymentDiscount || firstPaymentDiscount)) {
-                    const getHTML = (label, text, isPrice = false, type='discount') => {
-                        return `<div class=${type === 'discount' ? 'form-discount-container' : 'form-amount-container'}>
-                                    <div>${label}</div>
+                    const getHTML = (label, text, type, isPrice) => {
+                        function getCurrencySymbolForText(preOrNext) {
+                            const currencySymbol = paymentUtils.getCurrencySymbolByCode();
+                            const preCond = preOrNext === 'pre' && currencySymbol.length === 1;
+                            const nextCond = preOrNext === 'next' && currencySymbol.length > 1;
+                            return preCond || nextCond ? currencySymbol : '';
+                        };
+                        const _text = isPrice ? `${getCurrencySymbolForText('pre')}${parseFloat(text).formatMoney(decimal, dSeparator, tSeparator)}${getCurrencySymbolForText('next')}` : text;
+                        return `<div class='form-amount-container'>
+                                    <div class='form-${type}-price-label'>${label}</div>
                                     <div class="form-payment-price">
-                                        <span data-wrapper-react="true">${isPrice ? '$' : ''}
-                                            <span>${isPrice ? parseFloat(text).formatMoney(decimal, dSeparator, tSeparator) : text}</span>
+                                        <span data-wrapper-react="true">
+                                            <span class='${type}'>
+                                                ${_text}
+                                            </span>
                                         </span>
                                     </div>
                                 </div>`
@@ -12048,45 +12114,35 @@ var JotForm = {
 
                     JotForm.discounts.container = new Element('div', { 'class': 'form-payment-discount' });
                     const amountsContainer = new Element('div', { 'class': 'form-payment-amount' });
-                    let discountsHTML = '';
                     let amountsHTML = '';
 
-                    //* first payment discount
-                    if(firstPaymentDiscount){
-                        discountsHTML += getHTML('First Payment Discount', firstPaymentDiscount, true, 'discount')
+                    // first payment amount
+                    let fpAmountVal = firstPaymentVal === 0 && pair.value.trial_unit === 0 ? recurringVal : firstPaymentVal;
+                    const gatewaysWithFreeTrial = ['square', 'cybersource'];
+                    if (gatewaysWithFreeTrial.includes(JotForm.payment)) {
+                        fpAmountVal = pair.value.trial_unit === 0 ? fpAmountVal : 0;
                     }
+                    amountsHTML +=  getHTML('TODAY’S TOTAL:', fpAmountVal, 'first-payment', true);
+                    // recurring payment amount
+                    const subsPeriodConfig = paymentUtils.getSubscriptionPeriodConfig(pair.value.recurrence_interval, String(pair.value.recurrence_unit));
+                    amountsHTML +=  getHTML(`${subsPeriodConfig ? subsPeriodConfig.keys[0] : ''}&nbsp;Recurring Total:`, recurringVal, 'recur-payment', true);
 
-                    //* recurring payment discount
-                    if(recurPaymentDiscount){
-                        discountsHTML += getHTML(firstPaymentDiscount ? 'Recurring Payment Discount' : 'Discount', recurPaymentDiscount, true, 'discount')
+                    // custom number of recurring payments
+                    const productSelector = window.FORM_MODE === 'cardform' ? `.product.product--subscription[data-pid="${pair.key.split('_').pop()}"]` : `.form-product-item[pid="${pair.key.split('_').pop()}"]`;
+                    const product = document.querySelector(productSelector);
+                    const customRecurDropdown = product && product.querySelector('.custom-recurring-payments');
+                    if (customRecurDropdown) {
+                        const customRecurVal = customRecurDropdown.value === 'unlimited' ? 'Unlimited' : `x${customRecurDropdown.value}`;
+                        amountsHTML +=  getHTML('Number of Payments:', customRecurVal, 'custom-recurring');
                     }
-
-                    //* recurrence interval
-                    if(pair.value.recurrence_interval){
-                        discountsHTML += getHTML('Recurrence', pair.value.recurrence_interval, false, 'discount')
-                    }
-
-                    //* coupon code
-                    if(document.querySelector('#coupon-input') && document.querySelector('#coupon-input').value){
-                        discountsHTML += getHTML('Applied Coupon Code', document.querySelector('#coupon-input').value, false, 'discount')
-                    }
-
-                    if(pair.value.recurring){
-                        //* first payment amount
-                        amountsHTML +=  getHTML('First Payment Amount', subTotal, true, 'amount')
-                    }
-
-                    //* recurring payment amount
-                    amountsHTML +=  getHTML(isSetupFee ? 'Recurring Payment Amount':'Total', recurringVal, true, 'amount')
-
-
-                    JotForm.discounts.container.insert(discountsHTML);
-                    amountsContainer.insert(amountsHTML)
+                    amountsContainer.insert(amountsHTML);
                     recurPaymentContainer.insertAdjacentElement('beforebegin', JotForm.discounts.container);
-                    recurPaymentContainer.insert(amountsContainer)
+                    recurPaymentContainer.insert(amountsContainer);
 
-                    document.querySelector('.form-payment-recurringpayments .form-payment-label').style.display = 'none';
-                } */
+                    if (window.FORM_MODE === 'cardform') {
+                        recurPaymentContainer.style.display = 'block';
+                    }
+                }
             }
 
           if($(pair.key) || JotForm.couponApplied){
@@ -12584,7 +12640,7 @@ var JotForm = {
 
                 $(pair.value.specialPriceField).observe('change', function () {
                     setTimeout(countSpecialTotal, 50);
-                    triggerAssociatedElement(this);
+                    // triggerAssociatedElement(this);
                 });
                 $(pair.value.specialPriceField).observe('keyup', function () {
                     setTimeout(countSpecialTotal, 50);
@@ -16607,9 +16663,13 @@ var JotForm = {
 
         JotForm.nextPage = false;
         input = $(input);
-        if (window.AgentInitializer && window.agentInitialized && window.embeddedAgentMethods) {
-            window.embeddedAgentMethods.setTooltip('You need help with that?', { withPulse: true, pulseType: 'error', timeout: 5000 });
-        }
+
+        try {
+            if (window.AgentInitializer && window.agentInitialized && window.embeddedAgentMethods && window.embeddedAgentMethods.setTooltip) {
+                window.embeddedAgentMethods.setTooltip('You need help with that?', { withPulse: true, pulseType: 'error', timeout: 5000 });
+            }
+         } catch (error) {}
+
         if (input.errored) {
             return false;
         }
@@ -19547,6 +19607,7 @@ var JotForm = {
       questions.each(function(question) {
         if (question) {
           switch (question.type) {
+            case 'control_paypalcomplete':
             case 'control_chargify':
               var email = $this.hasQuestion(questions, 'control_email');
               if (email !== false) {
@@ -19556,7 +19617,9 @@ var JotForm = {
 
                 emails[0].observe('blur', function (e) {
                   if ( e.target.value ) {
-                    $$('.cc_email')[0].value = e.target.value;
+                      if ($$('.cc_email').length > 0 && $$('.cc_email')[0].disabled === false) {
+                          $$('.cc_email')[0].value = e.target.value;
+                      }
                   };
                 });
               }
@@ -20796,7 +20859,8 @@ var JotForm = {
     setupFormSettledEvent: () => {
       const isPrefill = !!JotForm.getPrefillToken();
       const isSACL = !!(window.JFForm && window.JFForm.draftID);
-      let count = 0 + Number(isSACL) + Number(isPrefill);
+      const hasAppointment = !!document.querySelector('[data-type=control_appointment]');
+      let count = 0 + Number(isSACL) + Number(isPrefill) + Number(hasAppointment);
 
       const checkIsFormSetteled = () => {
         if (count !== 0) {
@@ -20807,6 +20871,7 @@ var JotForm = {
         window.parent.postMessage('formSettled', '*');
         document.removeEventListener('PrefillCompleted', checkIsFormSetteled);
         document.removeEventListener('SACLCompleted', checkIsFormSetteled);
+        document.removeEventListener('AppointmentSettled', checkIsFormSetteled);
       }
 
       if (isPrefill) {
@@ -20814,6 +20879,9 @@ var JotForm = {
       }
       if (isSACL) {
         document.addEventListener('SACLCompleted', checkIsFormSetteled);
+      }
+      if (hasAppointment) {
+        document.addEventListener('AppointmentSettled', checkIsFormSetteled);
       }
       checkIsFormSetteled();
     },
@@ -22168,16 +22236,20 @@ function nameInputListenerForAssistantTooltip() {
               return;
             }
             const capitalizedFirstName = `${firstName.charAt(0).toUpperCase()}${firstName.slice(1)}`;
-            if (window.embeddedAgentMethods) {
-                const firstNameWord = capitalizedFirstName.trim().split(' ')[0];
 
-                window.embeddedAgentMethods.showUserGreetingTooltip({
-                  userName: firstNameWord,
-                  interval: 60000,
-                  timeoutForEachTooltip: 4000
-                });
-                window.embeddedAgentMethods.postMessageToAgent({ action: 'greet-user', text: firstNameWord }, '*');
-            }
+            try {
+                if (window.embeddedAgentMethods && window.embeddedAgentMethods.showUserGreetingTooltip && window.embeddedAgentMethods.postMessageToAgent) {
+                    const firstNameWord = capitalizedFirstName.trim().split(' ')[0];
+
+                    window.embeddedAgentMethods.showUserGreetingTooltip({
+                    userName: firstNameWord,
+                    interval: 60000,
+                    timeoutForEachTooltip: 4000
+                    });
+                    window.embeddedAgentMethods.postMessageToAgent({ action: 'greet-user', text: firstNameWord }, '*');
+                }
+            } catch (error) {}
+
             firstNameField.removeEventListener('blur', blurHandler);
             firstNameField.removeEventListener('focus', focusHandler);    
         }, 5000);
