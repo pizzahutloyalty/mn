@@ -2936,7 +2936,7 @@ var JotForm = {
                                 } else {
                                     uploadedFiles = uploadedFiles.concat(JSON.parse(uploadedFileInput.value));
                                 }
-                                uploadedFiles.push(filename);
+                                uploadedFiles.push(uploadHiddenInput.value);
                                 uploadedFileInput.value = JSON.stringify(uploadedFiles);
                             }
                             var fileServerInput = document.getElementById('file_server');
@@ -2957,9 +2957,13 @@ var JotForm = {
                             var uploadedFileID = ['uploadNewForSACL', field].join('-');
                             var uploadedFile = $(uploadedFileID);
                             var uplodedFileArray = uploadedFile ? JSON.parse(uploadedFile.value) : [];
-                            if (uplodedFileArray.includes(filename)){
+                            var deletedFile = filename;
+                            if (JotForm.uploadServerURL) {
+                                deletedFile = $(id).value;
+                            }
+                            if (uplodedFileArray.includes(deletedFile)){
                                 const filteredUplodedFileArray = uplodedFileArray.filter(function (item) {
-                                    return item !== filename;
+                                    return item !== deletedFile;
                                 });
                                 if (filteredUplodedFileArray.length < 1){
                                     $(uploadedFileID).remove();
@@ -2976,7 +2980,7 @@ var JotForm = {
                                 } else {
                                     deletedFiles = deletedFiles.concat(JSON.parse(deletedFileInput.value));
                                 }
-                                deletedFiles.push(filename);
+                                deletedFiles.push(deletedFile);
                                 deletedFileInput.value = JSON.stringify(deletedFiles);
                             }
                         }
@@ -6689,7 +6693,7 @@ var JotForm = {
                         } else {
                             //for matrices
                             value = $$('#id_' + term.field + ' input,' + '#id_' + term.field + ' select').collect(function (e) {
-                                return e.getAttribute('type') === 'checkbox' ? (e.checked ? e.value : '') : e.value;
+                                return e.getAttribute('type') === 'checkbox' || e.getAttribute('type') === 'radio' ? (e.checked ? e.value : '') : e.value;
                             });
                             if (JotForm.checkValueByOperator(term.operator, term.value, value)) {
                                 any = true;
@@ -7835,6 +7839,10 @@ var JotForm = {
         var elements = [];
         if (subfieldID) {
             elements = $$('#id_' + qid + ' input[id$=-' + subfieldID + '], #id_' + qid + ' textarea[id$=-' + subfieldID + '], #id_' + qid + ' select[id$=-' + subfieldID + ']');
+            
+            if (window.FORM_MODE == 'cardform' && $('input_' + qid + '_field_' + subfieldID) && $('input_' + qid + '_field_' + subfieldID).hasClassName("js-forMixed")) {
+                elements = $$('#id_' + qid + ' input[id$=_' + subfieldID + '], #id_' + qid + ' textarea[id$=_' + subfieldID + '], #id_' + qid + ' select[id$=_' + subfieldID + ']');
+            }
         } else {
             elements = $$('#id_' + qid + ' input, #id_' + qid + ' textarea, #id_' + qid + ' select');
         }
@@ -19648,8 +19656,8 @@ var JotForm = {
                 var mollieField = $$('.form-line[data-type="control_mollie"]')[0];
 
                 // **** For email fields ****
-                if (isEmailFieldExist !== false) {
-                    var emailFields = $$('input[type="email"]');
+                var emailFields = $$('input[type="email"]');
+                if (isEmailFieldExist !== false && emailFields && emailFields.length > 0) {
                     var latestEmailValues = {}; // We will keep the latest values of fields.
 
                     emailFields[0].observe('blur', function (e) {
@@ -19673,8 +19681,8 @@ var JotForm = {
                 }
 
                 // **** For address fields ****
-                if (isAddressFieldExist !== false) {
-                    var addressFields = $$('.form-line[data-type="control_address"]');
+                var addressFields = $$('.form-line[data-type="control_address"]');
+                if (isAddressFieldExist !== false && addressFields && addressFields.length > 0) {
                     var inputs = $(addressFields[0]).select('input, select');
                     var latestAddressValues = {}; // We will keep the latest values of fields.
 
