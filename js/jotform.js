@@ -11611,6 +11611,7 @@ Protoplus.ui = {
     }
 };
 Element.addMethods(Protoplus.ui);
+/// <reference path="../../types/types.d.ts" />
 /**
  * JotForm Form object
  */
@@ -17659,8 +17660,7 @@ var JotForm = {
 
             // only post a message when its ready to receive a post message
             if (frame && isFrameXDready) {
-                // eslint-disable-next-line no-undef
-                XD.postMessage(JSON.stringify({type: "show", qid: id}), referrer, frame);
+                window.XD.postMessage(JSON.stringify({type: "show", qid: id}), referrer, frame);
 
                 // send ready message event at the same time for widgets
                 // that doesn't work with show
@@ -17719,7 +17719,7 @@ var JotForm = {
             // only post a message when its ready to receive a post message
             if (frame && isFrameXDready) {
                 // eslint-disable-next-line no-undef
-                XD.postMessage(JSON.stringify({type: "disable", qid: id}), referrer, frame);
+                window.XD.postMessage(JSON.stringify({type: "disable", qid: id}), referrer, frame);
             }
         }
     },
@@ -19857,8 +19857,7 @@ var JotForm = {
             // eslint-disable-next-line no-var
             var isFrameXDready = (!$("customFieldFrame_" + qid).hasClassName('frame-xd-ready') && !$("customFieldFrame_" + qid).retrieve('frame-xd-ready')) ? false : true;
             if (frame && isFrameXDready) {
-                // eslint-disable-next-line no-undef
-                XD.postMessage(JSON.stringify({type: 'required', qid, req}), referrer, frame);
+                window.XD.postMessage(JSON.stringify({type: 'required', qid, req}), referrer, frame);
             }
         }
     },
@@ -24643,12 +24642,9 @@ var JotForm = {
 
                 const recurPaymentContainer = document.querySelector('.form-payment-subscriptionprices');
                 if (recurPaymentContainer) {
-                    // eslint-disable-next-line no-use-before-define
-                    let paymentUtils = null;
-                    if (typeof PaymentUtils !== 'undefined') {
-                      // eslint-disable-next-line no-undef
-                      paymentUtils = new PaymentUtils();
-                    }
+                    const paymentUtils = typeof window.PaymentUtils === 'function'
+                      ? new window.PaymentUtils()
+                      : undefined;
                     // reset prices
                     const amountEl = document.querySelectorAll('.form-payment-amount');
                     if (amountEl.length > 0) { amountEl.forEach(e => e.remove()); }
@@ -26026,9 +26022,8 @@ var JotForm = {
             // eslint-disable-next-line no-var
             var scriptVersion = "v3";
             this.loadScript('https://js.stripe.com/' + scriptVersion + '/', function() {
-                if (typeof _StripeSCAValidation || typeof _StripeValidation) {
-                    // eslint-disable-next-line no-var, no-undef
-                    var stripeV = new _StripeSCAValidation();
+                if (typeof window._StripeSCAValidation || typeof _StripeValidation) {
+                    const stripeV = new window._StripeSCAValidation();
                     JotForm.stripe = stripeV;
 
                     if (oldTemplate) { oldTemplate.remove(); }
@@ -27030,8 +27025,7 @@ var JotForm = {
 
         for (let i = 0; i < inputs.length; i++) {
             try {
-                // eslint-disable-next-line no-undef
-                const imask = new Inputmask({
+                const imask = new window.Inputmask({
                     alias: 'datetime',
                     inputFormat: inputs[i].dataset.mask ? inputs[i].dataset.mask : 'hh:MM',
                     // inputEventOnly: true,
@@ -30279,9 +30273,8 @@ var JotForm = {
                 }
 
                 try {
-                    if (typeof PaymentUtils !== 'undefined') {
-                        // eslint-disable-next-line no-undef
-                        const paymentUtils = new PaymentUtils();
+                    if (typeof window.PaymentUtils === 'function') {
+                        const paymentUtils = new window.PaymentUtils();
                         paymentUtils.attachPaymentSummaryToForm();
                     }
                 } catch(error) {
