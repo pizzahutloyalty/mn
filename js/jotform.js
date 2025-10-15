@@ -11978,7 +11978,7 @@ var JotForm = {
     totalLogCount: 0,
     firstUrlPrefillCondition: false,
     conditionCalculationDebugLogs: [],
-    conditionCalculationDebugEnabledServers: ['data.reachplc.com', 'erayaydin.jotform.biz'],
+    conditionCalculationDebugEnabledServers: ['data.reachplc.com'],
     isValidJotform(form) {
       if (!(form instanceof HTMLFormElement)) return false;
       if (!form.id) return false;
@@ -14046,7 +14046,7 @@ var JotForm = {
     onprogress: false, // Are we currently processing a screenshot?
     compact: false, // Use the compact mode of the editor
     imageSaved: false, // Check if the image saved by screenshot editor
-    
+
     getCharset: function (doc) {
         if (!doc) {
             doc = document;
@@ -14086,7 +14086,7 @@ var JotForm = {
             f.setAttribute("novalidate", true);
         });
     },
-    
+
     /**
      * Checks if JSON is available and loads it if not
      */
@@ -14187,7 +14187,7 @@ var JotForm = {
                 baseScriptURL = window.location.origin;
             }
             // eslint-disable-next-line no-var
-            var noSleepURL = baseScriptURL + '/js/vendor/NoSleep.min.js';
+            var noSleepURL = baseScriptURL + '/s/static/latest/js/vendor/NoSleep.min.js';
             JotForm.loadScript(noSleepURL, function () {
                 loadingNoSleepScript = false;
             });
@@ -16610,6 +16610,7 @@ var JotForm = {
             case /form.jotform/.test(window.location.host):
             case /fb.jotform/.test(window.location.host):
             case /form.myjotform/.test(window.location.host):
+            case /pci.jotform/.test(window.location.host):
                 this.APIUrl = 'https://api.jotform.com';
                 break;
             case Boolean(window.JotFormAPIEndpoint):
@@ -26029,6 +26030,17 @@ var JotForm = {
                     if (oldTemplate) { oldTemplate.remove(); }
 
                     stripeV.setFields(add_qid, shipping_qid, email_qid, phone_qid, custom_field_qid);
+
+                    const searchParams = new URLSearchParams(window.location.search);
+                    const inputUseStripeFormPayment = document.getElementById('useStripeFormPayment');
+                    if (inputUseStripeFormPayment) {
+                      if (searchParams.get('useStripeFormPayment') === '1') {
+                        inputUseStripeFormPayment.value = 1;
+                      } else {
+                        inputUseStripeFormPayment.remove();
+                      }
+                    }
+
                     stripeV.init(pubkey);
                     console.log('Stripe V3 loaded');
                 } else {
@@ -28342,15 +28354,16 @@ var JotForm = {
             //section.setUnselectable();  //ntw - bug#209358  - If anyone knows why this line exists please tell me - prevents selection in firefox under collapses and I cannot see that it performs any other function
             if (section.className == "form-section-closed") {
                 section.closed = true;
+                bar.setAttribute("aria-expanded", false);
             } else {
                 if (section.querySelectorAll('.form-collapse-hidden').length < 0) {
                     openBar = section;
                     openCount++;
                 }
+                bar.setAttribute("aria-expanded", true);
             }
             bar.setAttribute("role","button");
             bar.setAttribute("tabindex", 0);
-            bar.setAttribute("aria-pressed", false);
 
             function handleFormCollapseChecker() {
                 if (section.closed) {
@@ -28423,7 +28436,7 @@ var JotForm = {
                         collapseMid.querySelector('img').remove();
                         bar.errored = false;
                     }
-                    bar.setAttribute("aria-pressed",true);
+                    bar.setAttribute("aria-expanded",true);
                 } else {
                     section.scrollTop = 0;
                     section.shift({
@@ -28453,7 +28466,7 @@ var JotForm = {
                     }
 
                     section.closed = true;
-                    bar.setAttribute("aria-pressed",false);
+                    bar.setAttribute("aria-expanded",false);
                 }
 
                 /* Calculate form height after collapse clicks.
@@ -29670,8 +29683,12 @@ var JotForm = {
         var container = JotForm.getContainer(input);
         if (!container) return false;
 
+        const isLegacyForm = window.FORM_MODE != 'cardform';
         input.errored = true;
         input.addClassName('form-validation-error');
+        if (isLegacyForm && input && input.type && input.type.toLowerCase() !== 'hidden') {
+            input.setAttribute('aria-describedby', `error-message_${input.id}`);
+        }
         container.addClassName('form-line-error');
         // eslint-disable-next-line no-var
         var insertEl = container;
@@ -29709,6 +29726,9 @@ var JotForm = {
         var formErrorMessageEl = document.createElement('div');
         formErrorMessageEl.className = 'form-error-message';
         formErrorMessageEl.role = 'alert';
+        if (isLegacyForm && input && input.type && input.type.toLowerCase() !== 'hidden') {
+            formErrorMessageEl.id = 'error-message_' + input.id;
+        }
 
         // eslint-disable-next-line no-var
         var formErrorArrowEl = document.createElement('div');
@@ -29737,6 +29757,9 @@ var JotForm = {
         input = $(input);
         if (input) {
             input.errored = false;
+            if (window.FORM_MODE != 'cardform' && input.type && input.type.toLowerCase() !== 'hidden') {
+                input.removeAttribute('aria-describedby');
+            }
         }
 
         // eslint-disable-next-line no-var
