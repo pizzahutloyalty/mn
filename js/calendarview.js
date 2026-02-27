@@ -103,7 +103,11 @@ Calendar.handleMouseDownEvent = function(event)
 // clean this up!
 Calendar.handleMouseUpEvent = function(event, key)
 {
-  var el        = Event.element(event);
+  var el = Event.element(event);
+  if (el.tagName === 'BUTTON' && el.dataset.date) {
+    el = el.closest('td');
+  }
+
   var calendar  = el.calendar;
   var isNewDate = false;
 
@@ -288,35 +292,47 @@ function handlePopupUI(calendar, style) {
     month = dateArray.slice(0, dateArray.length - 1).join(' ');
     year = dateArray[dateArray.length - 1];
 
-    var checkHeader = container.querySelectorAll('.calendar-new-header');
-    if (checkHeader && checkHeader.length > 0) {
-      for (var index = 0; index < checkHeader.length; index++) {
-        checkHeader[index].remove();
-      }
+    var newHeader = container.querySelector('.calendar-new-header');
+    if (!newHeader) {
+      title.style.display = 'none';
+      newHeader = document.createElement('tr');
+      newHeader.classList.add('calendar-new-header');
+      title.parentNode.insertAdjacentElement('beforebegin', newHeader);
     }
 
-    var newHeader = document.createElement('div');
-    newHeader.classList.add('calendar-new-header');
-    newHeader.innerHTML = '<div class="calendar-new-month"><span>'+month+'</span></div><div class="calendar-new-year">'+year+'</div>';
-    title.parentNode.insertAdjacentElement('beforebegin', newHeader);
+    var calendarNewMonth = newHeader.querySelector('.calendar-new-month[aria-live="polite"]');
+    var calendarNewYear = newHeader.querySelector('.calendar-new-year[aria-live="polite"]');
+      if (calendarNewMonth && calendarNewYear) {
+        calendarNewMonth.querySelector('.calendar-new-month-text').innerHTML = month;
+        calendarNewYear.querySelector('.calendar-new-year-text').innerHTML = year;
+      } else {
+      var newHeaderTh = document.createElement('th');
+      newHeaderTh.setAttribute('style', 'background-color: transparent !important; color: inherit; font-size: 16px; font-weight: 500;');
+      newHeaderTh.classList.add('calendar-new-month');
+      newHeaderTh.setAttribute('aria-live', 'polite');
+      newHeaderTh.innerHTML = '<span class="calendar-new-month-text">'+month+'</span>';
+      newHeader.appendChild(newHeaderTh);
+      newHeaderTh = document.createElement('th');
+      newHeaderTh.setAttribute('style', 'background-color: transparent !important; color: inherit; font-size: 16px; font-weight: 500;');
+      newHeaderTh.classList.add('calendar-new-year');
+      newHeaderTh.setAttribute('aria-live', 'polite');
+      newHeaderTh.innerHTML = '<span class="calendar-new-year-text">'+year+'</span>';
+      newHeader.appendChild(newHeaderTh);
 
-    var newMonthNode = newHeader.querySelector('.calendar-new-month');
-    var newYearNode = newHeader.querySelector('.calendar-new-year');
+      calendarNewMonth = newHeader.querySelector('.calendar-new-month');
+      calendarNewYear = newHeader.querySelector('.calendar-new-year');
+      nextMonth.setAttribute('aria-label', 'Next Month')
+      prevMonth.setAttribute('aria-label', 'Previous Month')
+      nextYear.setAttribute('aria-label', 'Next Year')
+      prevYear.setAttribute('aria-label', 'Previous Year')
+      calendarNewMonth.appendChild(prevMonth);
+      calendarNewMonth.appendChild(nextMonth);
+      calendarNewYear.appendChild(prevYear);
+      calendarNewYear.appendChild(nextYear);
+
+      container.querySelector('.calendar-temporary').remove();
+    }
     
-    newMonthNode.appendChild(prevMonth);
-    newMonthNode.appendChild(nextMonth);
-
-    nextMonth.setAttribute('aria-label', 'Next Month, current month is '+month)
-    prevMonth.setAttribute('aria-label', 'Previous Month, current month is '+month)
-
-    nextYear.setAttribute('aria-label', 'Next Year, current year is '+year)
-    prevYear.setAttribute('aria-label', 'Previous Year, current year is '+year)
-
-    newYearNode.appendChild(prevYear);
-    newYearNode.appendChild(nextYear);
-
-    title.style.display = 'none';
-
     if (calendar.triggerElement && calendar.triggerInputElement) {
       var dateValue = new Date(calendar.triggerInputElement.value);
       var ariaLabelDate = !isNaN(dateValue) ? 'Change date, ' + dateValue.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Choose Date'
@@ -509,7 +525,7 @@ Calendar.setup = function(params)
           calendar.showAtElement(targetElem.querySelector('span input'));
         }
         if (!autoCalendar) {
-          var selectedDate = calendar.container.querySelector('td.selected');
+          var selectedDate = calendar.container.querySelector('td.selected button');
           selectedDate.setAttribute('tabindex', 0);
           selectedDate.focus();
         }
@@ -655,36 +671,34 @@ Calendar.prototype = {
   },
 
   setDynamicLimits: function() {
+    function getComparativeDate(dateString) {
+      // Match dynamic date strings like "today+9" or "today-3"
+      const match = dateString.match(/^today([+-])(\d+)$/i);
 
-    var getComparativeDate = function(dat) {
-      var todayKey = dat.indexOf('today') > -1 ? /today/ : new RegExp(Calendar.TODAY.trim(), 'i');
-      if(todayKey.test(dat)) {
-        var comp = new Date();
-        var offset = parseInt(dat.replace(/\s/g, "").split(todayKey)[1]) || 0;
-        comp.setDate(comp.getDate() + offset);
+      // If it’s not a dynamic string, just return it as-is (YYYY-MM-DD)
+      if (!match) return dateString;
 
-        var getUnselectedDaysCount = function (){
-          var curDate = new Date();
-          var unselectedDaysCount = 0;
-          while (curDate <= comp) {
-            var dayName = curDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-            if (lim.days[dayName] !== undefined && lim.days[dayName] === false){
-              unselectedDaysCount++;
-            }
+      const [_fullMatch, operator = '+', valueStr = "0"] = match;
+      const daysCount = parseInt(valueStr, 10) || 0;
+      const endDate = new Date();
 
-            curDate.setDate(curDate.getDate() + 1);
-          }
-          return unselectedDaysCount;
-        }
+      let count = 0;
 
-        if (lim.countSelectedDaysOnly) {
-          comp.setDate(comp.getDate() + getUnselectedDaysCount());
-        }
-        return comp.getFullYear()+"-"+JotForm.addZeros(comp.getMonth()+1, 2)+"-"+JotForm.addZeros(comp.getDate(), 2);
-      } else {
-        return dat;
+      while (count < daysCount) {
+        // Go to the next day, either back or forward depending on the operator
+        endDate.setDate(endDate.getDate() + (operator === '-' ? -1 : 1));
+
+        // Get the day of the week - Ensure the correct locale to match the lim.days
+        const dayName = endDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+
+        // Count increments only if the day is selectable
+        if (!lim.countSelectedDaysOnly || lim.days[dayName]) count++;
       }
+
+      // Return the dateString as YYYY-MM-DD
+      return endDate.getFullYear()+"-"+JotForm.addZeros(endDate.getMonth() + 1, 2)+"-"+JotForm.addZeros(endDate.getDate(), 2);
     }
+
     var lim = this.limits
     lim.start = getComparativeDate(lim.start);
     lim.end = getComparativeDate(lim.end);
@@ -741,22 +755,35 @@ Calendar.prototype = {
     Element.getElementsBySelector(this.container, 'tbody tr').each(
       function(row, i) {
         var rowHasDays = false;
+        row.setAttribute('role', 'row');
         row.immediateDescendants().each(
           function(cell, j) {
             var day            = date.getDate();
             var dayOfWeek      = date.getDay();
             var isCurrentMonth = (date.getMonth() == month);
+            var cellDate = new Date(date);
+            var daySpan = new Element('span');
+            daySpan.setAttribute('aria-hidden', true);
+            daySpan.update(day);
+
+            var button = new Element('button', {
+              tabindex: -1,
+              role: 'button',
+              'aria-pressed': false,
+              'data-date': cellDate.toLocaleDateString("en-US"),
+              'aria-label': cellDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+              style: 'pointer-events: none; padding: 0; border: none; background: none; cursor: pointer; color: inherit;',
+            });
+            button.addEventListener('focus', () => cell.addClassName('selected'));
+            button.addEventListener('blur', () => cell.removeClassName('selected'));
+            button.appendChild(daySpan);
+            cell.update(button);
 
             // Reset classes on the cell
             cell.className = '';
-            cell.date = new Date(date);
-            cell.update(day);
-
-            var cellAria = cell.date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            cell.setAttribute('aria-label', cellAria);
-            cell.setAttribute('data-date', cell.date.toLocaleDateString("en-US"));
-            cell.setAttribute('tabindex', -1);
-            cell.setAttribute('aria-selected', false);
+            cell.date = cellDate;
+            cell.setAttribute('role', 'gridcell');
+            
             // Account for days of the month other than the current month
             if (!isCurrentMonth){
               cell.addClassName('otherDay');
@@ -768,10 +795,9 @@ Calendar.prototype = {
             // Ensure the current day is selected
             if (isCurrentMonth && day == dayOfMonth) {
               cell.addClassName('selected');
-              cell.setAttribute('tabindex', 0);
-              cell.setAttribute('aria-selected', true);
-
-              calendar.currentDateElement = cell;
+              button.setAttribute('tabindex', 0);
+              button.setAttribute('aria-pressed', true);
+              cell.currentDateElement = button;
             }
             
             var allDays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -905,7 +931,8 @@ Calendar.prototype = {
 
             // Today
             if (date.getFullYear() == thisYear && date.getMonth() == thisMonth && day == thisDay){
-              cell.addClassName('today');                
+              cell.addClassName('today');
+              button.setAttribute('aria-current', 'date');
             }
 
             // Weekend
@@ -1024,7 +1051,7 @@ Calendar.prototype = {
     }
 
     // Calendar Table
-    var table = this.table ? this.table.update("") : new Element('table', { role: 'grid' });
+    var table = this.table ? this.table.update("") : new Element('table', { role: 'grid', tabindex: -1 });
     this.table = table;
 
     // Calendar Header
@@ -1033,6 +1060,7 @@ Calendar.prototype = {
 
     if (!JotForm.isSourceTeam && !JotForm.isMarvelTeam) {
       var row = new Element('tr');
+      row.setAttribute('aria-hidden', true);
       var cell = new Element('td', { colSpan: 7 });
       cell.addClassName('title');
       row.appendChild(cell);
@@ -1040,7 +1068,7 @@ Calendar.prototype = {
     }
 
     // Calendar Navigation
-    row = new Element('tr');
+    row = new Element('tr', { class: 'calendar-temporary' });
 
     var checkLegacyForm = document.querySelectorAll('.calendar.popup[data-version="v2"]');
     if (checkLegacyForm && checkLegacyForm.length > 0) {
@@ -1068,7 +1096,11 @@ Calendar.prototype = {
 
     for (var i = startDay; i <= endDay; ++i) {
 
-      cell = new Element('th').update(Calendar.SHORT_DAY_NAMES[i]);
+      cell = new Element('th', { scope: 'col' });
+      var shortNameSpan = new Element('span', { 'aria-hidden': true }).update(Calendar.SHORT_DAY_NAMES[i]);
+      var longNameSpan = new Element('span', { style: 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;' }).update(Calendar.DAY_NAMES[i]);
+      cell.appendChild(shortNameSpan);
+      cell.appendChild(longNameSpan);
       
       if (i === startDay || i == endDay){
         cell.addClassName('weekend');          
@@ -1082,6 +1114,7 @@ Calendar.prototype = {
     for (i = 7; i > 0; --i) {
       row = tbody.appendChild(new Element('tr'));
       row.addClassName('days');
+      row.setAttribute('role', 'row');
       for (var j = 7; j > 0; --j) {
         cell = row.appendChild(new Element('td', { tabindex: -1, 'aria-selected': false }));  
         cell.calendar = this;
@@ -1189,7 +1222,7 @@ Calendar.prototype = {
     var calendarNode = this.container;
     var isButtonActiveElement = document.activeElement.closest('.calendar-new-header') ? document.activeElement : false;
 
-    var days = calendarNode.querySelectorAll('.days td:not(.unslectable)');
+    var days = calendarNode.querySelectorAll('.days td:not(.unslectable) button');
     var index =  Array.from(days).findIndex(d => d.getAttribute('data-date') === activeDay); 
 
     if (!calendarNode || !this.triggerElement) {
@@ -1228,6 +1261,7 @@ Calendar.prototype = {
         this.hide();
       }
     
+      e.target = e.target.closest('td');
       Calendar.handleMouseUpEvent(e, e.key);
   
       if (isButtonActiveElement) {

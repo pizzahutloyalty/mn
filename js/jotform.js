@@ -8124,7 +8124,7 @@ Object.extend(document, {
         contentClass:false, // CSS class of the content box
         buttonsClass:false, // CSS class of the buttons box
         closeButton:'X', // Close button content, can be replaced with an image
-        fullScreenButton: '<img src="images/wizard-fullscreen.png" style="width:18px; height:18px;" class="fullscreen-wiz" title="Full Screen">',
+        fullScreenButton: '<img src="assets/v3/images/wizard-fullscreen.png" style="width:18px; height:18px;" class="fullscreen-wiz" title="Full Screen">',
         allowFullScreen:false, //allow the wizard to be fullscreened
         defaultFullScreen:false, //open in fullscreen
         openEffect:true, // Enable/Disable the effect on opening
@@ -8438,7 +8438,7 @@ Object.extend(document, {
                 }
                 fullScreened = !fullScreened;
             }
-            
+
         }
 
         $(document.body).insert(win);
@@ -8667,7 +8667,7 @@ Protoplus.ui = {
             if (options.className !== "edit-option") {
                 currentValue = currentValue.unescapeHTML();
             }
-            
+
             currentValue = (currentValue == options.defaultText)? "" : currentValue;
             //currentValue = options.escapeHTML? currentValue.escapeHTML() : currentValue;
             currentValue = options.processBefore(currentValue, elem);
@@ -8908,7 +8908,7 @@ Protoplus.ui = {
                     liItem.addClassName('context-menu-item-disabled');
                 }
                 if(item.items){
-                    liItem.insert('<img align="right" src="images/right-handle.png" style="margin-top:2px;" />');
+                    liItem.insert('<img align="right" src="assets/v3/images/right-handle.png" style="margin-top:2px;" />');
                     createInnerList(liItem, item);
                 }
 
@@ -9859,7 +9859,7 @@ Protoplus.ui = {
             defaultText:"Search",
             onWrite:Prototype.K,
             onClear:Prototype.K,
-            imagePath:"images/apple_search.png"
+            imagePath:"assets/v3/images/apple_search.png"
         }, options || {});
 
         element.observe("keyup", function(e){
@@ -9955,11 +9955,11 @@ Protoplus.ui = {
             onUpdate:Prototype.K,
             maxValue:100,
             value:0,
-            buttonBack:'url("../images/ball.png") no-repeat scroll 0px 0px transparent'
+            buttonBack:'url("/assets/v3/images/ball.png") no-repeat scroll 0px 0px transparent'
         }, options || {});
 
         if("JotForm" in window && "url" in JotForm){
-            options.buttonBack = 'url("'+JotForm.url+'images/ball.png") no-repeat scroll 0px 0px transparent';
+            options.buttonBack = 'url("'+JotForm.url+'assets/v3/images/ball.png") no-repeat scroll 0px 0px transparent';
         }
 
         var valueToPixel = function(value){
@@ -10156,7 +10156,7 @@ Protoplus.ui = {
             value:false,
             allowEmpty:false,
             size: 5,
-            imgPath: 'images/',
+            imgPath: 'assets/v3/images/',
             onChange: Prototype.K
         }, options || {});
 
@@ -10177,7 +10177,7 @@ Protoplus.ui = {
             }
         }
         //check negative if minimum is not set
-        else if (!options.allowNegative && parseFloat(element.value) < 0) 
+        else if (!options.allowNegative && parseFloat(element.value) < 0)
         {
             element.value = '0';
         }
@@ -10234,7 +10234,7 @@ Protoplus.ui = {
             var newValue = parseFloat(element.value)-parseFloat(options.addAmount);
             if(options.minValue) { // Don't go below to minValue
                 if(Number(newValue) < Number(options.minValue)){ return; }
-            }  
+            }
             else if(!options.allowNegative && newValue < 0){ return; } // Don't go negative
             element.value = newValue;
             options.onChange(element.value);
@@ -10457,9 +10457,9 @@ Protoplus.ui = {
             hideOnBlur: false,
             buttonClass:'big-button buttons'
         }, options || {});
-        
+
         var customColorHex;
-        
+
         $(options.trigger || element).observe('click', function(){
             var docEvent = false;
 
@@ -10930,7 +10930,7 @@ Protoplus.ui = {
             overflow:0,
             onResize: Prototype.K,
             onResizeEnd: Prototype.K,
-            imagePath:'images/resize.png',
+            imagePath:'assets/v3/images/resize.png',
             element:false,
             maxHeight:false,
             minHeight:false,
@@ -11515,7 +11515,7 @@ Protoplus.ui = {
             var li = document.createElement('li');
             li.setAttribute("value",opt.value.strip(opt.value.stripTags()));
             li.innerHTML = opt.text.escapeHTML();
-            
+
             if(opt.hasClassName("bold")) {
                 li.setStyle('color:#555; font-weight:bold;');
             }
@@ -11611,6 +11611,7 @@ Protoplus.ui = {
     }
 };
 Element.addMethods(Protoplus.ui);
+
 /// <reference path="../../types/types.d.ts" />
 /**
  * JotForm Form object
@@ -11987,6 +11988,7 @@ var JotForm = {
     },
     EventObserver: (function intitalizeFormEventObserver() {
         const searchParams = new URLSearchParams(window.location.search);
+        const isChatgptApp = searchParams.get('app') === 'chatgpt';
         const isDebugEnabled = searchParams.get('debug') === '1';
         const isObserverEnabledByUrlParam = searchParams.get('eventObserver') === '1';
 
@@ -12096,7 +12098,7 @@ var JotForm = {
 
             // form.submit() will now send a new submit event instead of directly submitting the form.
             if (isDebugEnabled) console.log('form.submit() was called on a jotform form', this, 'calling form.requestSubmit()');
-            if (typeof window.HTMLFormElement.prototype.requestSubmit === 'function') {
+            if (typeof window.HTMLFormElement.prototype.requestSubmit === 'function' && !isChatgptApp) {
                 this.requestSubmit();
             } else {
                 _originalFormSubmitMethod.call(this)
@@ -12438,13 +12440,13 @@ var JotForm = {
             }
 
             if (window.formHelperAgentProp) {
-                const {agentHeaderBackgroundColor, avatarIconLink, agentRenderURL, ...rest} = JSON.parse(window.formHelperAgentProp);
+                const {agentHeaderBackgroundColor, avatarIconLink, agentRenderURL, customizations, ...rest} = JSON.parse(window.formHelperAgentProp);
                 if (!rest.loggedInUser || (rest.loggedInUser && !rest.loggedInUser.name && !rest.loggedInUser.username)) {
                   nameInputListenerForAssistantTooltip();
                 };
 
                 putChatIDInForm(new URL(agentRenderURL).origin);
-                helperAgentProps = {...helperAgentProps, background: agentHeaderBackgroundColor, avatarURL:avatarIconLink, agentRenderURL, ...rest}
+                helperAgentProps = {...helperAgentProps, background: agentHeaderBackgroundColor, avatarURL:avatarIconLink, agentRenderURL, customizations: customizations || {}, ...rest}
             }
 
             window.agentInitialized = true;
@@ -12465,6 +12467,66 @@ var JotForm = {
                 const agentMethods = window.AgentInitializer.init(helperAgentProps);
                 window.embeddedAgentMethods = agentMethods;
               }
+        }
+    },
+
+    addFakeData: function (baseScriptURL) {
+        const fillFormWithFakeDataURL = baseScriptURL + '/s/static/latest/js/fillFormWithFakeData.js?rev=' + new Date().getTime();
+        const highLightAnimationStyle = document.createElement('style');
+        highLightAnimationStyle.textContent = `
+            .ai-highlight-animation-on-form-questions li {
+            background: linear-gradient(276.14deg, rgba(151, 71, 255, 0) 3.16%, rgba(151, 71, 255, 0.13) 56.16%, rgba(151, 71, 255, 0) 93.12%) no-repeat;
+            background-position-x: -668px;
+            animation: ai-highlight-animation 2s forwards;
+            animation-delay: 1s;
+            }
+
+            @keyframes ai-highlight-animation {
+            0% {
+                background-position-x: -668px;
+            }
+            100% {
+                background-position-x: 668px;
+            }
+            }
+        `;
+        document.head.appendChild(highLightAnimationStyle);
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = fillFormWithFakeDataURL;
+        script.onload = function() {
+            if (window.fillFormWithFakeData) {
+                window.fillFormWithFakeData();
+                const questionListContainer = document.querySelector('.form-section.page-section');
+                if (questionListContainer) {
+                questionListContainer.classList.add('ai-highlight-animation-on-form-questions');
+                }
+            }
+            setTimeout(() => {
+                const questionListContainer = document.querySelector('.form-section.page-section');
+                if (questionListContainer) {
+                questionListContainer.classList.remove('ai-highlight-animation-on-form-questions');
+                }
+            }, 4500);
+        };
+        document.body.appendChild(script);
+    },
+
+    initWithFakeData: function () {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const initFormWithFakeData = urlParams.get("initWithFakeData");
+
+            let baseScriptURL = 'https://cdn.jotfor.ms';
+            if (JotForm.enterprise || window.location.href.indexOf('jotform.pro') > -1) {
+                baseScriptURL = window.location.origin;
+            }
+
+            if (initFormWithFakeData === "1") {
+                this.addFakeData(baseScriptURL);
+            }
+        } catch (error) {
+            console.error(error)
         }
     },
 
@@ -12903,6 +12965,439 @@ var JotForm = {
                     });
 
                     /**
+                     * For ChatGPT App & Jotform AI, we want to run some animations on form load
+                     */
+                    const searchParams = new URLSearchParams(window.location.search);
+                    const isChatgptApp = searchParams.get('app') === 'chatgpt'
+                    const isAutopilot = searchParams.get('appName') === 'autopilot-form-agent';
+                    const hideFieldsOnInit = searchParams.get('hideFieldsOnInit') || JotForm.hiddenFieldsOnInit;
+                    const editedQuestions = searchParams.get('editedQuestions') || JotForm.editedQuestions;
+                    if ((isChatgptApp || isAutopilot) && (hideFieldsOnInit || editedQuestions)) {
+                        const handleChanges = function(changes) {
+                            const animateQuestion = (qid, animationType) => {
+                                if (!editedQuestions) return;
+                                const questionElement = document.getElementById('id_' + qid);
+                                if (!questionElement) return;
+                                const currentCenter = window.innerHeight / 2;
+                                // dont scroll if question is already above center
+                                if (questionElement.getBoundingClientRect().top > currentCenter) {
+                                    questionElement.scrollTo({ top: 0, behavior: 'smooth' });
+                                }
+                                // Remove any existing animation classes
+                                questionElement.classList.remove(
+                                    'form-change-animate-created',
+                                    'form-change-animate-deleted',
+                                    'form-change-animate-updated'
+                                );
+
+                                // Force reflow to restart animation
+                                void questionElement.offsetWidth;
+
+                                // Add the appropriate animation class
+                                questionElement.classList.add(`form-change-animate-${animationType}`);
+
+                                if (animationType === 'deleted') {
+                                    questionElement.addEventListener('animationend', () => {
+                                        questionElement.remove();
+                                    });
+                                }
+                                if (animationType === 'created') {
+                                    questionElement.addEventListener('animationend', () => {
+                                        questionElement.classList.remove('form-change-animate-created');
+                                    });
+                                }
+                            };
+
+                            if (changes.created && Array.isArray(changes.created)) {
+                                changes.created.forEach((item, index) => {
+                                    setTimeout(() => {
+                                        animateQuestion(item.qid, 'created');
+                                    }, index * 100); // Stagger by 100ms
+                                });
+                            }
+
+                            if (changes.deleted && Array.isArray(changes.deleted)) {
+                                changes.deleted.forEach((item, index) => {
+                                    setTimeout(() => {
+                                        animateQuestion(item.qid, 'deleted');
+                                    }, index * 100);
+                                });
+                            }
+
+                            if (changes.deleted && !(changes.deleted.length > 0) && changes.created && !(changes.created.length > 0) && changes.updated && changes.updated.length > 0) {
+                                changes.updated.forEach((item, index) => {
+                                    setTimeout(() => {
+                                        animateQuestion(item.qid, 'updated');
+                                    }, index * 100);
+                                });
+                            }
+                        };
+                        const initQuestions = async function () {
+                            if (!hideFieldsOnInit) return;
+                            const questionElements = document.querySelectorAll('.form-line');
+                            const showQuestion = async (el) => {
+                                el.style.display = 'block';
+                                return new Promise((resolve) => {
+                                    el.scrollIntoView({ behavior: 'smooth', block: isChatgptApp ? 'center' : 'nearest' });
+                                    const onScrollEnd = () => {
+                                        el.addEventListener('animationend', () => { 
+                                            el.style.opacity = '1'; 
+                                            resolve();
+                                        });
+                                        el.style.animation = 'question-initial 1s forwards';
+                                        window.removeEventListener('scrollend', onScrollEnd);
+                                    }
+                                    onScrollEnd();
+                                });
+                            }
+
+                            for (let question of questionElements) {
+                                await showQuestion(question);
+                            }
+                            JotForm.newHandleIframeHeight();
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                        // Inject animation styles for form changes
+                        const formChangesAnimationStyle = document.createElement('style');
+                        const isFullScreen = window.openai ? window.openai.displayMode === 'fullscreen' : false;
+                        formChangesAnimationStyle.textContent = `
+                            .form-line {
+                                display: ${hideFieldsOnInit && !isFullScreen ? 'none' : 'block'};
+                                opacity: ${hideFieldsOnInit && !isFullScreen ? '0' : '1'};
+                            }
+
+                            @keyframes question-initial {
+                                0% {
+                                    transform: translateX(-50px);
+                                    opacity: 0;
+                                }
+                                100% {
+                                    transform: translateX(0);
+                                    opacity: 1;
+                                }
+                            }
+
+                            @keyframes form-change-created {
+                                0% {
+                                    transform: translateY(0);
+                                }
+                                10% {
+                                    transform: translateY(-15px);
+                                }
+                                20% {
+                                    transform: translateY(0);
+                                }
+                                30% {
+                                    transform: translateY(-12px);
+                                }
+                                40% {
+                                    transform: translateY(0);
+                                }
+                                50% {
+                                    transform: translateY(-10px);
+                                    border-color: rgba(0, 128, 0, 1);
+                                }
+                                60% {
+                                    transform: translateY(0);
+                                }
+                                70% {
+                                    transform: translateY(-7px);
+                                }
+                                75% {
+                                    border-color: rgba(0, 128, 0, 0.5);
+                                }
+                                80% {
+                                    transform: translateY(0);
+                                }
+                                90% {
+                                    transform: translateY(-4px);
+                                }
+                                100% {
+                                    transform: translateY(0);
+                                    border-color: rgba(0, 128, 0, 0);
+                                }
+                            }
+
+                            @keyframes form-change-deleted {
+                                0% {
+                                    opacity: 1;
+                                    transform: scale(1);
+                                    mask-image: none;
+                                    filter: blur(0px);
+                                }
+                                10% {
+                                    opacity: 0.97;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 70%, transparent 88%),
+                                                radial-gradient(circle at 80% 70%, black 68%, transparent 86%),
+                                                radial-gradient(circle at 50% 20%, black 66%, transparent 84%),
+                                                radial-gradient(circle at 10% 80%, black 64%, transparent 82%),
+                                                radial-gradient(circle at 90% 40%, black 69%, transparent 87%),
+                                                radial-gradient(circle at 40% 60%, black 62%, transparent 80%),
+                                                radial-gradient(circle at 70% 10%, black 60%, transparent 78%),
+                                                radial-gradient(circle at 15% 50%, black 58%, transparent 76%),
+                                                radial-gradient(circle at 85% 90%, black 56%, transparent 74%),
+                                                radial-gradient(circle at 60% 80%, black 54%, transparent 72%),
+                                                radial-gradient(circle at 30% 15%, black 52%, transparent 70%),
+                                                radial-gradient(circle at 75% 50%, black 50%, transparent 68%),
+                                                radial-gradient(circle at 25% 75%, black 48%, transparent 66%),
+                                                radial-gradient(circle at 55% 45%, black 46%, transparent 64%),
+                                                radial-gradient(circle at 65% 25%, black 44%, transparent 62%);
+                                    filter: blur(0.3px);
+                                }
+                                20% {
+                                    opacity: 0.92;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 62%, transparent 78%),
+                                                radial-gradient(circle at 80% 70%, black 60%, transparent 76%),
+                                                radial-gradient(circle at 50% 20%, black 58%, transparent 74%),
+                                                radial-gradient(circle at 10% 80%, black 56%, transparent 72%),
+                                                radial-gradient(circle at 90% 40%, black 61%, transparent 77%),
+                                                radial-gradient(circle at 40% 60%, black 54%, transparent 70%),
+                                                radial-gradient(circle at 70% 10%, black 52%, transparent 68%),
+                                                radial-gradient(circle at 15% 50%, black 50%, transparent 66%),
+                                                radial-gradient(circle at 85% 90%, black 48%, transparent 64%),
+                                                radial-gradient(circle at 60% 80%, black 46%, transparent 62%),
+                                                radial-gradient(circle at 30% 15%, black 44%, transparent 60%),
+                                                radial-gradient(circle at 75% 50%, black 42%, transparent 58%),
+                                                radial-gradient(circle at 25% 75%, black 40%, transparent 56%),
+                                                radial-gradient(circle at 55% 45%, black 38%, transparent 54%);
+                                    filter: blur(0.8px);
+                                }
+                                30% {
+                                    opacity: 0.85;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 54%, transparent 68%),
+                                                radial-gradient(circle at 80% 70%, black 52%, transparent 66%),
+                                                radial-gradient(circle at 50% 20%, black 50%, transparent 64%),
+                                                radial-gradient(circle at 10% 80%, black 48%, transparent 62%),
+                                                radial-gradient(circle at 90% 40%, black 53%, transparent 67%),
+                                                radial-gradient(circle at 40% 60%, black 46%, transparent 60%),
+                                                radial-gradient(circle at 70% 10%, black 44%, transparent 58%),
+                                                radial-gradient(circle at 15% 50%, black 42%, transparent 56%),
+                                                radial-gradient(circle at 85% 90%, black 40%, transparent 54%),
+                                                radial-gradient(circle at 60% 80%, black 38%, transparent 52%),
+                                                radial-gradient(circle at 30% 15%, black 36%, transparent 50%),
+                                                radial-gradient(circle at 75% 50%, black 34%, transparent 48%),
+                                                radial-gradient(circle at 25% 75%, black 32%, transparent 46%);
+                                    filter: blur(1.5px);
+                                }
+                                40% {
+                                    opacity: 0.8;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 46%, transparent 58%),
+                                                radial-gradient(circle at 80% 70%, black 44%, transparent 56%),
+                                                radial-gradient(circle at 50% 20%, black 42%, transparent 54%),
+                                                radial-gradient(circle at 10% 80%, black 40%, transparent 52%),
+                                                radial-gradient(circle at 90% 40%, black 45%, transparent 57%),
+                                                radial-gradient(circle at 40% 60%, black 38%, transparent 50%),
+                                                radial-gradient(circle at 70% 10%, black 36%, transparent 48%),
+                                                radial-gradient(circle at 15% 50%, black 34%, transparent 46%),
+                                                radial-gradient(circle at 85% 90%, black 32%, transparent 44%),
+                                                radial-gradient(circle at 60% 80%, black 30%, transparent 42%),
+                                                radial-gradient(circle at 30% 15%, black 28%, transparent 40%),
+                                                radial-gradient(circle at 75% 50%, black 26%, transparent 38%);
+                                    filter: blur(2px);
+                                }
+                                50% {
+                                    opacity: 0.7;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 38%, transparent 48%),
+                                                radial-gradient(circle at 80% 70%, black 36%, transparent 46%),
+                                                radial-gradient(circle at 50% 20%, black 34%, transparent 44%),
+                                                radial-gradient(circle at 10% 80%, black 32%, transparent 42%),
+                                                radial-gradient(circle at 90% 40%, black 37%, transparent 47%),
+                                                radial-gradient(circle at 40% 60%, black 30%, transparent 40%),
+                                                radial-gradient(circle at 70% 10%, black 28%, transparent 38%),
+                                                radial-gradient(circle at 15% 50%, black 26%, transparent 36%),
+                                                radial-gradient(circle at 85% 90%, black 24%, transparent 34%),
+                                                radial-gradient(circle at 60% 80%, black 22%, transparent 32%),
+                                                radial-gradient(circle at 30% 15%, black 20%, transparent 30%);
+                                    filter: blur(3px);
+                                }
+                                60% {
+                                    opacity: 0.6;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 30%, transparent 38%),
+                                                radial-gradient(circle at 80% 70%, black 28%, transparent 36%),
+                                                radial-gradient(circle at 50% 20%, black 26%, transparent 34%),
+                                                radial-gradient(circle at 10% 80%, black 24%, transparent 32%),
+                                                radial-gradient(circle at 90% 40%, black 29%, transparent 37%),
+                                                radial-gradient(circle at 40% 60%, black 22%, transparent 30%),
+                                                radial-gradient(circle at 70% 10%, black 20%, transparent 28%),
+                                                radial-gradient(circle at 15% 50%, black 18%, transparent 26%),
+                                                radial-gradient(circle at 85% 90%, black 16%, transparent 24%);
+                                    filter: blur(4px);
+                                }
+                                70% {
+                                    opacity: 0.45;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 22%, transparent 28%),
+                                                radial-gradient(circle at 80% 70%, black 20%, transparent 26%),
+                                                radial-gradient(circle at 50% 20%, black 18%, transparent 24%),
+                                                radial-gradient(circle at 10% 80%, black 16%, transparent 22%),
+                                                radial-gradient(circle at 90% 40%, black 21%, transparent 27%),
+                                                radial-gradient(circle at 40% 60%, black 12%, transparent 18%),
+                                                radial-gradient(circle at 70% 10%, black 10%, transparent 16%);
+                                    filter: blur(5px);
+                                }
+                                80% {
+                                    opacity: 0.3;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 15%, transparent 20%),
+                                                radial-gradient(circle at 80% 70%, black 12%, transparent 18%),
+                                                radial-gradient(circle at 50% 20%, black 10%, transparent 15%),
+                                                radial-gradient(circle at 10% 80%, black 8%, transparent 13%),
+                                                radial-gradient(circle at 90% 40%, black 14%, transparent 19%);
+                                    filter: blur(6px);
+                                }
+                                90% {
+                                    opacity: 0.15;
+                                    mask-image: radial-gradient(circle at 20% 30%, black 8%, transparent 12%),
+                                                radial-gradient(circle at 80% 70%, black 6%, transparent 10%),
+                                                radial-gradient(circle at 50% 20%, transparent 0%, transparent 0%),
+                                                radial-gradient(circle at 10% 80%, transparent 0%, transparent 0%),
+                                                radial-gradient(circle at 90% 40%, black 7%, transparent 11%);
+                                    filter: blur(8px);
+                                }
+                                100% {
+                                    opacity: 0;
+                                    transform: scale(1);
+                                    mask-image: radial-gradient(circle at 20% 30%, transparent 0%, transparent 0%),
+                                                radial-gradient(circle at 80% 70%, transparent 0%, transparent 0%),
+                                                radial-gradient(circle at 50% 20%, transparent 0%, transparent 0%),
+                                                radial-gradient(circle at 10% 80%, transparent 0%, transparent 0%),
+                                                radial-gradient(circle at 90% 40%, transparent 0%, transparent 0%);
+                                    mask-size: 100% 100%;
+                                    mask-composite: intersect;
+                                    filter: blur(10px);
+                                }
+                            }
+                            
+                            .form-change-animate-updated {
+                                position: relative;
+                                overflow: hidden;
+                                clip-path: inset(0% 0% 100% 0%);
+                                -webkit-clip-path: inset(0% 0% 100% 0%);
+                                animation: update-field-fade 0.4s ease-in forwards,
+                                        update-field-reveal 1.5s ease-out 0.4s forwards;
+                            }
+
+                            .form-change-animate-updated::before {
+                                content: '';
+                                position: absolute;
+                                top: -4px;
+                                left: 0;
+                                right: 0;
+                                height: 4px;
+                                background: #22c55e;
+                                z-index: 1000;
+                                opacity: 0;
+                                animation: update-line-sweep 1.5s ease-out 0.4s forwards;
+                                box-shadow: 0 0 8px rgba(34, 197, 94, 0.6), 
+                                        0 2px 4px rgba(34, 197, 94, 0.4);
+                            }
+
+                            .form-change-animate-updated::after {
+                                content: '';
+                                position: absolute;
+                                top: 0;
+                                left: 0;
+                                right: 0;
+                                width: 100%;
+                                height: 0%;
+                                background: linear-gradient(to bottom,
+                                    rgba(34, 197, 94, 0.35) 0%,
+                                    rgba(34, 197, 94, 0.25) 30%,
+                                    rgba(34, 197, 94, 0.15) 60%,
+                                    rgba(34, 197, 94, 0.05) 90%,
+                                    transparent 100%);
+                                z-index: 999;
+                                animation: update-background-sweep 1.5s ease-out 0.4s forwards;
+                                pointer-events: none;
+                            }
+
+                            @keyframes update-line-sweep {
+                                0% {
+                                    top: -4px;
+                                    opacity: 0;
+                                }
+                                5% {
+                                    opacity: 1;
+                                }
+                                90% {
+                                    opacity: 1;
+                                }
+                                100% {
+                                    top: 100%;
+                                    opacity: 0;
+                                }
+                            }
+
+                            @keyframes update-background-sweep {
+                                0% {
+                                    height: 0%;
+                                    opacity: 0.35;
+                                }
+                                50% {
+                                    opacity: 0.3;
+                                }
+                                100% {
+                                    height: 100%;
+                                    opacity: 0;
+                                }
+                            }
+
+                            @keyframes update-field-fade {
+                                0% {
+                                    opacity: 1;
+                                }
+                                100% {
+                                    opacity: 0;
+                                }
+                            }
+
+                            @keyframes update-field-reveal {
+                                0% {
+                                    clip-path: inset(0% 0% 100% 0%);
+                                    -webkit-clip-path: inset(0% 0% 100% 0%);
+                                    opacity: 0;
+                                }
+                                100% {
+                                    clip-path: inset(0% 0% 0% 0%);
+                                    -webkit-clip-path: inset(0% 0% 0% 0%);
+                                    opacity: 1;
+                                }
+                            }
+
+                            .form-change-animate-created {
+                                animation: form-change-created 4s ease-out forwards;
+                                animation-delay: 0.5s;
+                                mask-composite: add;
+                                -webkit-mask-composite: add;
+                                border: 2px solid rgba(0, 128, 0, 1);
+                                border-radius: 1rem;
+                            }
+
+                            .form-change-animate-deleted {
+                                animation: form-change-deleted 3s ease-in forwards;
+                                animation-delay: 0.5s;
+                                pointer-events: none;
+                                mask-composite: add;
+                                -webkit-mask-composite: add;
+                            }
+                        `;
+                        document.head.appendChild(formChangesAnimationStyle);
+                        if (editedQuestions) {
+                            const parsedChanges = JSON.parse(decodeURIComponent(editedQuestions));
+                            handleChanges(parsedChanges);
+                        }
+                        if (!isFullScreen) {
+                            window.addEventListener('message', (event) => {
+                                if (event.data === 'startFormAnimations') {
+                                    initQuestions();
+                                }
+                            });
+                        }
+                    }
+                    if (isChatgptApp && !hideFieldsOnInit) {
+                        JotForm.newHandleIframeHeight();
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+
+                    /**
                      * for smart pdf forms, recalculate the height of the iframe
                      * after data-mode attribute is changed on the html tag
                      */
@@ -12962,14 +13457,6 @@ var JotForm = {
                 this.getDefaults();
                 if(this.noJump) {
                     window.parent.postMessage("removeIframeOnloadAttr", '*');
-                }
-
-                if(getQuerystring('itemCatalog') === '1') {
-                    const hasPaymentInLegacy = Boolean(document.querySelector('[data-payment="true"]'));
-                    const hasPaymentInCard = Boolean(document.querySelector('[data-payment="newpayment"]'));
-                    if (hasPaymentInLegacy || hasPaymentInCard) {
-                        this.loadStyleSheet('../css/styles/payment/payment_ai_catalog.css');
-                    }
                 }
 
                 // eslint-disable-next-line no-var
@@ -13095,6 +13582,17 @@ var JotForm = {
                     this.setIFrameDeviceType();
                     this.handleIFrameHeight();
 
+                    window.addEventListener('message', function (event) {
+                        const { action, baseURL } = event.data || {};
+                        if (action === 'addFakeData') {
+                            let baseScriptURL = 'https://cdn.jotfor.ms';
+                            if (JotForm.enterprise || window.location.href.indexOf('jotform.pro') > -1) {
+                                baseScriptURL = window.location.origin;
+                            }
+                            JotForm.addFakeData(baseURL || baseScriptURL);
+                        }
+                    });
+
                     // if there is a recaptcha
                     // eslint-disable-next-line no-var
                     var visibleCaptcha = document.querySelector('li[data-type="control_captcha"]:not(.always-hidden)');
@@ -13146,7 +13644,9 @@ var JotForm = {
                 } else { // if token is available, wait the event
                     document.addEventListener('PrefillCompleted', this.highLightLines);
                 }
+                this.handleHighlightMatchedQuestions();
                 this.handleWidgetMessage();
+                this.handleParentSubmitMessage();
                 this.setButtonActions();
                 this.initGradingInputs();
                 this.initSpinnerInputs();
@@ -13205,6 +13705,7 @@ var JotForm = {
                 this.disableAcceptonChrome();
                 this.handleSignatureEvents();
                 this.handleSignSignatureInputs();
+                this.handleAdvancedSignatureInputs();
                 this.handleFITBInputs();
                 this.setupFormSettledEvent();
                 if (JotForm.newDefaultTheme || JotForm.extendsNewTheme) {
@@ -13227,6 +13728,7 @@ var JotForm = {
                 this.adjustWorkflowFeatures();
                 this.handleWorkflowInternalForm();
                 this.generatePaymentTransactionId();
+                this.initWithFakeData();
                 // eslint-disable-next-line no-undef
                 calculateTimeToSubmit();
                 this.setDataCSSSelector();
@@ -13270,6 +13772,14 @@ var JotForm = {
 
                 if (this.isWorkflowForm) {
                     this.setupWorkflowOutcomes();
+                }
+
+                if (getQuerystring('showAllHiddenFields') == '1') {
+                    this.showAllHiddenFields();
+                }
+
+                if (getQuerystring('showAllHiddenPages') == '1') {
+                    this.showAllHiddenPages();
                 }
 
                 // when a form is embedded via a 3rd party app
@@ -14095,7 +14605,7 @@ var JotForm = {
             // eslint-disable-next-line no-var
             var script = document.createElement('script');
             script.type = "text/javascript";
-            script.src = "/js/vendor/json2.js";
+            script.src = "/s/static/latest/js/vendor/json2.js";
             document.body.appendChild(script);
         }
     },
@@ -14301,10 +14811,36 @@ var JotForm = {
                         var errorMsg = `The following file(s) have an invalid extension: ${invalidFiles.join(', ')}. ` +
                                        `Allowed types: ${allowedExtensions.join(', ')}.`;
                         return JotForm.errored(parent, errorMsg);
-                    } else {
-                        JotForm.corrected(parent);
-                        return true;
                     }
+
+                    let sizeLimitActive = fileInput.getAttribute('data-limit-file-size') || fileInput.getAttribute('limit-file-size');
+                    let maxFileSizeKB = parseInt((fileInput.getAttribute('data-file-maxsize') || fileInput.getAttribute('file-maxsize')), 10);
+
+                    if (sizeLimitActive !== 'No' && maxFileSizeKB > 0) {
+                        let maxFileSize = maxFileSizeKB * 1024;
+                        let oversizedFiles = [];
+
+                        for (let j = 0; j < files.length; j++) {
+                            let fileToCheck = files[j];
+                            if (fileToCheck.size > maxFileSize) {
+                                let fileSizeMB = (fileToCheck.size / (1024 * 1024)).toFixed(2);
+                                oversizedFiles.push({
+                                    name: fileToCheck.name,
+                                    size: fileSizeMB + 'MB'
+                                });
+                            }
+                        }
+
+                        if (oversizedFiles.length > 0) {
+                            let maxSizeFormatted = (maxFileSize / (1024 * 1024)).toFixed(2) + 'MB';
+
+                            let fileSizeErrorMsg = `The following file(s) exceed the ${maxSizeFormatted} size limit: ${oversizedFiles.map(f => `${f.name} (${f.size})`).join(', ')}`;
+                            return JotForm.errored(parent, fileSizeErrorMsg);
+                        }
+                    }
+
+                    JotForm.corrected(parent);
+                    return true;
                 }
 
                 // eslint-disable-next-line no-var
@@ -14461,6 +14997,7 @@ var JotForm = {
                                 uploadedFiles.push(uploadHiddenInput.value);
                                 uploadedFileInput.value = JSON.stringify(uploadedFiles);
                             }
+                            
                             // eslint-disable-next-line no-var
                             var fileServerInput = document.getElementById('file_server');
                             if (!fileServerInput) {
@@ -14519,6 +15056,18 @@ var JotForm = {
                         // Remove hidden fileUpload input
                         if ($(id)) $(id).remove();
                         parent.validateInput();
+                    },
+                    onEditFileName: function (id, fileName) {
+                        const inputElement = document.getElementById(id);
+
+                        // Split the stored input value into an array: [filename, folderId, fileId]
+                        const parts = inputElement.value.split('#');
+
+                        // Replace the old filename
+                        parts[0] = fileName;
+
+                        // Join them back together with '#'
+                        inputElement.value = parts.join('#');
                     },
                     showMessage: function (message) {
                         console.log('showMessage', arguments);
@@ -14634,7 +15183,7 @@ var JotForm = {
             formSavingIndicatorEl.className = 'form-saving-indicator';
             formSavingIndicatorEl.style.float = 'right';
             formSavingIndicatorEl.style.padding = '21px 12px 10px';
-            formSavingIndicatorEl.innerHTML = '<img src="' + JotForm.url + 'images/ajax-loader.gif" align="absmiddle" /> Saving...';
+            formSavingIndicatorEl.innerHTML = '<img src="' + JotForm.url + 'assets/v3/images/ajax-loader.gif" align="absmiddle" /> Saving...';
 
             JotForm.currentSection.querySelector(selectPageBreak).appendChild(formSavingIndicatorEl);
         }
@@ -17241,6 +17790,9 @@ var JotForm = {
             //     preLink = "https://cdn.jotfor.ms/";
             // }
             preLink = "https://cdn.jotfor.ms/";
+            if (window.staticRootPath) {
+              preLink = window.staticRootPath;
+            }
         }
 
         if (document.get.offline_forms == 'true' && document.get.jotformNext == 1) {
@@ -17249,7 +17801,16 @@ var JotForm = {
 
         const self = this;
         if (!window.editModeFunction) {
-            this.loadScript(preLink + '/js/form.edit.mode.js?v_' + (new Date()).getTime(), function () {
+            let editModeLink;
+            let stockEditLink;
+            if (document.get.offline_forms == 'true' && document.get.jotformNext == 1){
+                editModeLink = preLink + '/s/static/latest/js/form.edit.mode.js';
+                stockEditLink = preLink + '/s/static/latest/js/stock.edit.js';
+            } else {
+                editModeLink = preLink + 'js/form.edit.mode.js';
+                stockEditLink = preLink + 'js/stock.edit.js';
+            }
+            this.loadScript(editModeLink, function () {
                 //editModeFunction is function name defined in form.edit.mode.js
                 // eslint-disable-next-line no-undef
                 self.editMode = editModeFunction;
@@ -17259,7 +17820,7 @@ var JotForm = {
                 self.editMode(data, noreset, skipField, skipCardIndex, errorCb);
                 cb()
             });
-            this.loadScript(preLink + '/js/stock.edit.js?v_' + (new Date()).getTime())
+            this.loadScript(stockEditLink)
         } else {
             self.editMode(data, noreset, skipField, skipCardIndex, cb);
         }
@@ -17590,6 +18151,12 @@ var JotForm = {
         if (JotForm.getInputType(field) === 'signature' && wasHidden) {
             JotForm.showAndResizeESignature(field);
         }
+        if (JotForm.getInputType(field) === 'appointment' && wasHidden) {
+            let appointmentData = JotForm.appointments && JotForm.appointments[field];
+            if (appointmentData && appointmentData.pendingConstruct) {
+                appointmentData.pendingConstruct();
+            }
+        }
 
         // kenneth: form callapse + condition + widgets bug when collapse opened by default
         if (JotForm.getInputType(field) === 'collapse') {
@@ -17634,6 +18201,16 @@ var JotForm = {
         }
 
         return elemShown;
+    },
+
+    showAllHiddenFields: function () {
+        JotForm.conditions = [];
+        JotForm.fieldConditions = {};
+
+        $$('.always-hidden, .form-field-hidden').each(function(el) {
+            const id = el.getAttribute('id').split('_')[1];
+            JotForm.showField(id);
+        });
     },
 
     collectStylesheet: function () {
@@ -17719,7 +18296,7 @@ var JotForm = {
 
             // only post a message when its ready to receive a post message
             if (frame && isFrameXDready) {
-                // eslint-disable-next-line no-undef
+                 
                 window.XD.postMessage(JSON.stringify({type: "disable", qid: id}), referrer, frame);
             }
         }
@@ -19220,7 +19797,6 @@ var JotForm = {
 
             // Those who are curious about the numbers in this function.
             // ALL ARE MAGICAL !!!
-            // SORRY FOR SHITTING ANOTHER ONE :)
             // I HOPE I REFACTOR ANOTHER TIME
             // eslint-disable-next-line no-var
             var timestamp = new Date().getTime();
@@ -20566,7 +21142,7 @@ var JotForm = {
                     fieldId = slicedQid[1];
                   }
 
-                  // eslint-disable-next-line no-var
+                   
                   var tempInput = $('input_' + questionId + '_field_' + fieldId); // eslint-disable-line
 
                   if (tempInput && typeof tempInput.value !== 'undefined') {
@@ -21641,7 +22217,7 @@ var JotForm = {
 
                                 if (specOp === 'pow') { // This check can be removed and this fix can be applied to all mathematical functions but I'm not sure yet.
                                     if (typeof BigInt === 'function' && tempValue > Number.MAX_SAFE_INTEGER) { // Only try to use BigInt if the number is bigger than the MAX_SAFE_INTEGER constant.
-                                        // eslint-disable-next-line no-undef
+                                         
                                         tempValue = BigInt(tempValue).toString();
                                     } else if (tempValue < 1 && copyZero) {
                                         tempValue = tempValue.toFixed(calc.decimalPlaces);
@@ -22497,6 +23073,12 @@ var JotForm = {
      * Sets all events and actions for form conditions
      */
     setConditionEvents: function () {
+        // Debounce timers for condition checking to improve performance
+        const conditionDebounceTimers = {};
+        const CONDITION_DEBOUNCE_DELAY = 200; // milliseconds
+        // Only use debounce for specific enterprise user
+
+        const useDebounce = window.JotForm.enterprise === "eel.jotform.com";
         try {
             $A(JotForm.conditions).each(function (condition) {
 
@@ -22679,7 +23261,15 @@ var JotForm = {
 
                         nextButton.observe('mousedown', function () {
                             // JotForm.warn('Checking ' + $('label_' + id).innerHTML.strip());
-                            JotForm.checkCondition(condition, nextButton.id, 'mousedown');
+                            if (useDebounce) {
+                                const timerKey = nextButton.id + '_mousedown_' + condition.id;
+                                clearTimeout(conditionDebounceTimers[timerKey]);
+                                conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                    JotForm.checkCondition(condition, nextButton.id, 'mousedown');
+                                }, CONDITION_DEBOUNCE_DELAY);
+                            } else {
+                                JotForm.checkCondition(condition, nextButton.id, 'mousedown');
+                            }
                         });
                     });
                 }
@@ -22700,50 +23290,131 @@ var JotForm = {
                 }
                 if (event == "autocomplete") { // if event type is trigger by autocomplete, listen to blur and keyup events
                     $(field).observe('blur', function () {
-                        $A(conds).each(function (cond) {
-                            JotForm.checkCondition(cond, field, 'blur');
-                        });
+                        if (useDebounce) {
+                            const timerKey = field + '_blur';
+                            clearTimeout(conditionDebounceTimers[timerKey]);
+                            conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                $A(conds).each(function (cond) {
+                                    JotForm.checkCondition(cond, field, 'blur');
+                                });
+                            }, CONDITION_DEBOUNCE_DELAY);
+                        } else {
+                            $A(conds).each(function (cond) {
+                                JotForm.checkCondition(cond, field, 'blur');
+                            });
+                        }
                     }).run('blur');
                     $(field).observe('keyup', function () {
-                        $A(conds).each(function (cond) {
-                            JotForm.checkCondition(cond, field, 'keyup');
-                        });
+                        if (useDebounce) {
+                            const timerKey = field + '_keyup';
+                            clearTimeout(conditionDebounceTimers[timerKey]);
+                            conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                $A(conds).each(function (cond) {
+                                    JotForm.checkCondition(cond, field, 'keyup');
+                                });
+                            }, CONDITION_DEBOUNCE_DELAY);
+                        } else {
+                            $A(conds).each(function (cond) {
+                                JotForm.checkCondition(cond, field, 'keyup');
+                            });
+                        }
                     }).run('keyup');
                 } else if (event == "number") {
                     $(field).observe('change', function () {
-                        $A(conds).each(function (cond) {
-                            JotForm.checkCondition(cond, field, 'change');
-                        });
+                        if (useDebounce) {
+                            const timerKey = field + '_change';
+                            clearTimeout(conditionDebounceTimers[timerKey]);
+                            conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                $A(conds).each(function (cond) {
+                                    JotForm.checkCondition(cond, field, 'change');
+                                });
+                            }, CONDITION_DEBOUNCE_DELAY);
+                        } else {
+                            $A(conds).each(function (cond) {
+                                JotForm.checkCondition(cond, field, 'change');
+                            });
+                        }
                     }).run('change');
                     $(field).observe('keyup', function () {
-                        $A(conds).each(function (cond) {
-                            JotForm.checkCondition(cond, field, 'keyup');
-                        });
+                        if (useDebounce) {
+                            const timerKey = field + '_keyup';
+                            clearTimeout(conditionDebounceTimers[timerKey]);
+                            conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                $A(conds).each(function (cond) {
+                                    JotForm.checkCondition(cond, field, 'keyup');
+                                });
+                            }, CONDITION_DEBOUNCE_DELAY);
+                        } else {
+                            $A(conds).each(function (cond) {
+                                JotForm.checkCondition(cond, field, 'keyup');
+                            });
+                        }
                     }).run('keyup');
                 } else if (event == "autofill") {
                     $(field).observe('blur', function () {
-                        $A(conds).each(function (cond) {
-                            JotForm.checkCondition(cond, field, 'blur');
-                        });
+                        if (useDebounce) {
+                            const timerKey = field + '_blur';
+                            clearTimeout(conditionDebounceTimers[timerKey]);
+                            conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                $A(conds).each(function (cond) {
+                                    JotForm.checkCondition(cond, field, 'blur');
+                                });
+                            }, CONDITION_DEBOUNCE_DELAY);
+                        } else {
+                            $A(conds).each(function (cond) {
+                                JotForm.checkCondition(cond, field, 'blur');
+                            });
+                        }
                     }).run('blur');
                     $(field).observe('keyup', function () {
-                        $A(conds).each(function (cond) {
-                            JotForm.checkCondition(cond, field, 'keyup');
-                        });
+                        if (useDebounce) {
+                            const timerKey = field + '_keyup';
+                            clearTimeout(conditionDebounceTimers[timerKey]);
+                            conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                $A(conds).each(function (cond) {
+                                    JotForm.checkCondition(cond, field, 'keyup');
+                                });
+                            }, CONDITION_DEBOUNCE_DELAY);
+                        } else {
+                            $A(conds).each(function (cond) {
+                                JotForm.checkCondition(cond, field, 'keyup');
+                            });
+                        }
                     }).run('keyup');
 
                     if (!(!Prototype.Browser.IE9 && !Prototype.Browser.IE10 && Prototype.Browser.IE)) {
                         $(field).observe('change', function () {
-                            $A(conds).each(function (cond) {
-                                JotForm.checkCondition(cond, field, 'change');
-                            });
+                            if (useDebounce) {
+                                const timerKey = field + '_change';
+                                clearTimeout(conditionDebounceTimers[timerKey]);
+                                conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                    $A(conds).each(function (cond) {
+                                        JotForm.checkCondition(cond, field, 'change');
+                                    });
+                                }, CONDITION_DEBOUNCE_DELAY);
+                            } else {
+                                $A(conds).each(function (cond) {
+                                    JotForm.checkCondition(cond, field, 'change');
+                                });
+                            }
                         }).run('change');
                     }
                 } else {
                     $(field).observe(event, function () {
-                        $A(conds).each(function (cond) {
-                            JotForm.checkCondition(cond, field, event);
-                        });
+                        if (useDebounce) {
+                            // Debounce condition checking for better performance
+                            const timerKey = field + '_' + event;
+                            clearTimeout(conditionDebounceTimers[timerKey]);
+                            conditionDebounceTimers[timerKey] = setTimeout(function() {
+                                $A(conds).each(function (cond) {
+                                    JotForm.checkCondition(cond, field, event);
+                                });
+                            }, CONDITION_DEBOUNCE_DELAY);
+                        } else {
+                            $A(conds).each(function (cond) {
+                                JotForm.checkCondition(cond, field, event);
+                            });
+                        }
                     });
                     if (!$(field).id.match(/input_[0-9]+_quantity_[0-9]+_[0-9]+/)) { // b#652068 (do not auto-run condition events on quantity fields)
                         $(field).run(event);
@@ -23616,7 +24287,11 @@ var JotForm = {
      */
 
     handleEcheck: function () {
+        const paymentUtils = typeof window.PaymentUtils === 'function'
+          ? new window.PaymentUtils()
+          : undefined;
         if (typeof _echeck !== "function") {
+            paymentUtils.errorLogOnFront('Echeck payments script error', 'Echeck -> jotform.js/handleEcheck');
             return;
         }
         // eslint-disable-next-line no-var, no-undef
@@ -23629,12 +24304,16 @@ var JotForm = {
      */
 
     handleBraintree: function () {
+        const paymentUtils = typeof window.PaymentUtils === 'function'
+            ? new window.PaymentUtils()
+            : undefined;
         // skip on edit mode
         if (window.location.pathname.match(/^\/edit/) || (["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1 && document.get.sid)) {
             return;
         }
         if (typeof __braintree !== "function") {
             alert("Braintree payment script didn't work properly. Form will be reloaded");
+            paymentUtils.errorLogOnFront('Braintree payment script error', 'Braintree -> jotform.js/handleBraintree');
             location.reload();
             return;
         }
@@ -23659,6 +24338,9 @@ var JotForm = {
     },
 
     handleSquare: function () {
+        const paymentUtils = typeof window.PaymentUtils === 'function'
+            ? new window.PaymentUtils()
+            : undefined;
         // skip on edit mode
         if (/*JotForm.paidSubmission && */(window.location.href.match(/mode=inlineEdit/) || window.location.pathname.match(/^\/\/edit/) || window.location.pathname.match(/^\/edit/) || window.location.href.match(/mode=submissionToPDF/)) && document.get.sid) { // ["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1 does not work, JotForm.paidSubmission is unreachable from here (set in form.edit.mode.js)
             return;
@@ -23674,9 +24356,21 @@ var JotForm = {
 
         if (typeof __square !== "function") {
             alert("Square payment script didn't work properly. Form will be reloaded");
+            paymentUtils.errorLogOnFront('Square payment script error', 'Square -> jotform.js/handleSquare');
             location.reload();
             return;
         }
+
+        const searchParams = new URLSearchParams(window.location.search);
+        const inputUseSquareFormPayment = document.getElementById('useSquareFormPayment');
+        if (inputUseSquareFormPayment) {
+          if (searchParams.get('useSquareFormPayment') === '1') {
+            inputUseSquareFormPayment.value = 1;
+          } else {
+            inputUseSquareFormPayment.remove();
+          }
+        }
+
         // eslint-disable-next-line no-undef
         JotForm.squarePayment = __square();
         JotForm.squarePayment.loadSquareScript(function() {
@@ -23685,10 +24379,14 @@ var JotForm = {
     },
 
     handleSensepass: function () {
+        const paymentUtils = typeof window.PaymentUtils === 'function'
+          ? new window.PaymentUtils()
+          : undefined;
         if (JotForm.isEditMode() || JotForm.isDirectFlow === 'No') return;
 
         if (typeof __sensepass !== "function") {
             alert("Sensepass payment script didn't work properly. Form will be reloaded");
+            paymentUtils.errorLogOnFront('Sensepass payment script error', 'Sensepass -> jotform.js/handleSensepass');
             location.reload();
             return;
         }
@@ -23699,10 +24397,14 @@ var JotForm = {
     },
 
     handleStripeACH: function () {
+      const paymentUtils = typeof window.PaymentUtils === 'function'
+        ? new window.PaymentUtils()
+        : undefined;
       if (JotForm.isEditMode()) return;
 
       if (typeof __stripeACH === "undefined") {
         alert("Stripe ACH payments script didn't work properly. Form will be reloaded. ");
+        paymentUtils.errorLogOnFront('Stripe ACH payments script error', 'Stripe ACH -> jotform.js/handleStripeACH');
         location.reload();
         return;
       }
@@ -23713,10 +24415,14 @@ var JotForm = {
     },
 
     handleMollie: function () {
+      const paymentUtils = typeof window.PaymentUtils === 'function'
+        ? new window.PaymentUtils()
+        : undefined;
       if (JotForm.isEditMode()) return;
 
       if (typeof __mollie === "undefined") {
         alert("Mollie script didn't work properly. Form will be reloaded. ");
+        paymentUtils.errorLogOnFront('Mollie payment script error', 'Mollie -> jotform.js/handleMollie');
         location.reload();
         return;
       }
@@ -23727,10 +24433,14 @@ var JotForm = {
     },
 
     handleBluepay: function () {
+      const paymentUtils = typeof window.PaymentUtils === 'function'
+        ? new window.PaymentUtils()
+        : undefined;
       if (JotForm.isEditMode()) return;
 
       if (typeof __bluepay === "undefined") {
         alert("Bluepay script didn't work properly. Form will be reloaded. ");
+        paymentUtils.errorLogOnFront('Bluepay payments script error', 'Bluepay -> jotform.js/handleBluepay');
         location.reload();
         return;
       }
@@ -26023,7 +26733,7 @@ var JotForm = {
             // eslint-disable-next-line no-var
             var scriptVersion = "v3";
             this.loadScript('https://js.stripe.com/' + scriptVersion + '/', function() {
-                if (typeof window._StripeSCAValidation || typeof _StripeValidation) {
+                if (typeof window._StripeSCAValidation === 'function') {
                     const stripeV = new window._StripeSCAValidation();
                     JotForm.stripe = stripeV;
 
@@ -26143,7 +26853,7 @@ var JotForm = {
      * @param {Object} id
      */
     reloadCaptcha: function (id) {
-        document.querySelector(`#${id}_captcha`).src = JotForm.url + 'images/blank.gif';
+        document.querySelector(`#${id}_captcha`).src = JotForm.url + 'assets/v3/images/blank.gif';
         JotForm.initCaptcha(id);
     },
     /**
@@ -26257,12 +26967,303 @@ var JotForm = {
             });
         });
     },
+    // Handle matched question and document fields highlights in ai review dashboard
+    handleHighlightMatchedQuestions: function () {
+        const searchParams = new URLSearchParams(window.location.search);
+        const highlightMatchedQuestions = searchParams.get('highlightMatchedQuestions');
+        const fromDashboard = searchParams.get('fromDashboard');
+        const isCardForm = window.FORM_MODE === 'cardform';
+        if (!Boolean(highlightMatchedQuestions) || !Boolean(fromDashboard)) {
+            return;
+        }
+
+        JotForm.conditions = [];
+        document.querySelectorAll('.always-hidden, .form-field-hidden').forEach(el => {
+            const id = el.getAttribute('id').split('_')[1];
+            JotForm.showField(id);
+        });
+
+        if (!document.getElementById('highlight-question-styles')) {
+            const style = document.createElement('style');
+            style.id = 'highlight-question-styles';
+            let formStyles = '';
+            if (isCardForm) {
+                formStyles = `
+
+                    .jfCard:has(.matched-question) {
+                      outline: 2px solid transparent;
+                    }
+
+                    .jfCard:has(.matched-question):hover {
+                      outline: 2px solid rgba(0, 117, 227, 0.2);
+                    }
+
+                    .jfCard:has(.matched-question.selected){
+                      background: rgba(119, 207, 255, 1);
+                      outline: 2px solid rgba(0, 117, 227, 1);
+                      transition: all 0.3s ease !important;
+                    }
+
+                    .jfCard-question.matched-question {
+                      background: rgba(119, 207, 255, 0.45);
+                    }
+                `;
+            } else {
+                formStyles = `
+                    .matched-question {
+                        background-color: rgba(237, 248, 255, 0.6);
+                        transition: all 0.3s ease;
+                        cursor: pointer;
+                        border: 2px solid transparent;
+                    }
+
+                    .matched-question:hover {
+                        border: 2px solid rgba(0, 117, 227, 0.2);
+                    }
+
+                    .matched-question.selected {
+                        animation: highlightPulse 0.3s ease-out;
+                        border: 2px solid rgba(0, 117, 227, 1);
+                        border-radius: 4px;
+                    }
+
+                    @keyframes highlightPulse {
+                      0% {
+                       transform: scale(1);
+                      }
+
+                      50% {
+                       transform: scale(1.02);
+                      }
+
+                      100% {
+                       transform: scale(1);
+                      }
+                    }
+                `;
+            }
+            style.textContent = formStyles;
+            document.head.appendChild(style);
+        }
+
+        const setIsManuelSelected = (value) => {
+            window.isManuelSelected = value;
+        };
+
+        window.addEventListener('wheel', () => setIsManuelSelected(false), { passive: true });
+
+        const handleQuestionObserver = () => {
+            const options = {
+                threshold: 0.7
+            };
+
+            const visibleQuestions = new Set();
+            let currentSelectedId = null;
+
+            window.formQuestionObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        visibleQuestions.add(entry.target);
+                    } else {
+                        visibleQuestions.delete(entry.target);
+                    }
+                });
+
+                let topmost = null;
+                let minTop = Infinity;
+
+                if(window.isManuelSelected) return;
+
+                visibleQuestions.forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.top < minTop) {
+                        minTop = rect.top;
+                        topmost = el;
+                    }
+                });
+
+                if (topmost) {
+                    const element = topmost;
+                    let questionId = '';
+                    if (isCardForm) {
+                        const questionWrapper = element.closest('.form-line');
+                        questionId = questionWrapper ? questionWrapper.id.replace('id_', '') : '';
+                    } else {
+                        questionId = element.id.replace('id_', '');
+                    }
+
+                    if (currentSelectedId !== questionId) {
+                        currentSelectedId = questionId;
+
+                        document.querySelectorAll('.matched-question.selected').forEach(el => {
+                            el.classList.remove('selected');
+                        });
+                        element.classList.add('selected');
+
+                        if (window.parent && window.parent !== window && questionId) {
+                            window.parent.postMessage({
+                                action: 'matchedQuestionClicked',
+                                questionId: questionId
+                            }, '*');
+                        }
+                    }
+                }
+            }, options);
+
+            document.querySelectorAll('.matched-question').forEach(el => window.formQuestionObserver.observe(el));
+        }
+
+        window.addEventListener("message", function (event) {
+            try {
+                const { data } = event;
+
+                if (data && data.action === 'highlightMatchedQuestions' && !isCardForm) {
+                    document.querySelectorAll('.matched-question').forEach(el => {
+                        el.classList.remove('matched-question');
+                    });
+
+                    const questions = data.questions;
+                    questions.forEach(question => {
+                        const questionElement = document.getElementById('id_' + question);
+                        if (questionElement) {
+                            questionElement.classList.add('matched-question');
+                        }
+                    });
+
+                    handleQuestionObserver();
+                }
+
+                if (data && data.action === 'selectSelectedMatchedQuestion' && !isCardForm) {
+                    setIsManuelSelected(true);
+
+                    document.querySelectorAll('.matched-question.selected').forEach(el => {
+                        el.classList.remove('selected');
+                    });
+
+                    const questionId = data.questionId;
+                    const questionElement = document.getElementById('id_' + questionId);
+                    if (questionElement) {
+                        const pageSection = questionElement.closest('.page-section');
+                        if (pageSection) {
+                            const allSections = Array.from(document.querySelectorAll('.page-section'));
+                            const pageIndex = allSections.indexOf(pageSection);
+                            const currentSectionIndex = allSections.indexOf(JotForm.currentSection)
+                            if (pageIndex !== -1 && pageIndex !== currentSectionIndex) {
+                                const pageNumber = pageIndex + 1;
+                                JotForm.jumpToPage(pageNumber, false);
+                            }
+                        }
+
+                        questionElement.classList.add('selected');
+
+                        // Check if question is inside a collapsed section and uncollapse it
+                        if (JotForm.isCollapsed(questionElement)) {
+                            const collapseBar = JotForm.getCollapseBar(questionElement);
+                            if (collapseBar) {
+                                collapseBar.dispatchEvent(new Event('click'));
+                                setTimeout(() => {
+                                    questionElement.scrollIntoView({
+                                        behavior: 'smooth',
+                                        block: 'center',
+                                        inline: 'nearest'
+                                    });
+                                }, 1000);
+                            }
+                        } else {
+                            setTimeout(() => {
+                                questionElement.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'center',
+                                    inline: 'nearest'
+                                });
+                            }, 200);
+                        }
+                    }
+                }
+
+                if (data && data.action === 'highlightMatchedQuestions' && isCardForm) {
+                    document.querySelectorAll('.matched-question').forEach(el => {
+                        el.classList.remove('matched-question');
+                    });
+
+                    const questions = data.questions;
+                    questions.forEach(question => {
+                        const questionWrapper = document.getElementById('id_' + question);
+                        if (questionWrapper) {
+                            const questionElement = questionWrapper.querySelector('.jfCard-question');
+                            questionElement.classList.add('matched-question');
+                        }
+                    });
+
+                    handleQuestionObserver();
+                }
+
+                if(data && data.action === 'selectSelectedMatchedQuestion' && isCardForm) {
+                    setIsManuelSelected(true);
+
+                    document.querySelectorAll('.matched-question.selected').forEach(el => {
+                        el.classList.remove('selected');
+                    });
+
+                    const questionId = data.questionId;
+                    const questionWrapper = document.getElementById('id_' + questionId);
+                    const questionElement = questionWrapper.querySelector('.jfCard-question');
+                    if (questionElement) {
+                        questionElement.classList.add('selected');
+                        questionElement.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                            inline: 'nearest'
+                        });
+                    }
+                }
+
+                if (data && data.action === 'toggleMatchedQuestionObserver') {
+                    if (data.isActive) {
+                        handleQuestionObserver()
+                    } else {
+                        if (window.formQuestionObserver) {
+                            window.formQuestionObserver.disconnect();
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('ErrorOnHandleHighlightQuestion', e);
+            }
+        }, false);
+
+        document.addEventListener('click', function(event) {
+            const target = event.target;
+            const matchedQuestion = target.closest('.matched-question');
+            if (matchedQuestion) {
+                let questionId = '';
+                if (isCardForm) {
+                    const questionWrapper = matchedQuestion.closest('.form-line');
+                    questionId = questionWrapper.id.replace('id_', '');
+                } else {
+                    questionId = matchedQuestion.id.replace('id_', '');
+                }
+
+                document.querySelectorAll('.matched-question.selected').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                matchedQuestion.classList.add('selected');
+
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        action: 'matchedQuestionClicked',
+                        questionId: questionId
+                    }, '*');
+                }
+            }
+        }, false);
+    },
     // Handle messages from widget (iframe)
     handleWidgetMessage: function() {
         window.addEventListener("message", function (message) {
             try {
                 // eslint-disable-next-line no-var
-                var shittyParseMessageData = function(msg) {
+                var parseMessageData = function(msg) {
                     // Urgent late night fix for: https://www.jotform.com/answers/491718
                     if (typeof msg === 'string') {
                         // eslint-disable-next-line no-var
@@ -26276,7 +27277,7 @@ var JotForm = {
                     return msg;
                 };
                 // eslint-disable-next-line no-var
-                var parsedMessageData = shittyParseMessageData(message);
+                var parsedMessageData = parseMessageData(message);
                 if (parsedMessageData && parsedMessageData.type) {
                     switch(parsedMessageData.type) {
                     case 'collapse':
@@ -26294,6 +27295,28 @@ var JotForm = {
             }
         }, false);
     },
+
+    handleParentSubmitMessage: function () {
+        if (window.self === window.parent) {
+            return;
+        }
+        window.addEventListener("message", function (event) {
+            try {
+                const { data: { action, source } = {} } = event || {};
+                if (source !== 'form-builder') {
+                    return;
+                }
+                if (action === 'submit-form') {
+                    const form = JotForm && JotForm.forms && JotForm.forms[0] ? JotForm.forms[0] : false;
+                    if (form) {
+                        form.submit();
+                    }
+                }
+            } catch (e) {
+                console.error('ErrorOnHandleParentSubmitMessage', e);
+            }
+        });
+    },
     // Bug fix :: 3409477 (Terms & Conditions + Section Collapse Bug) & 3765441 (Section Collapse disappears when tabbed over)
     widgetSectionCollapse: function(qid) {
         if (qid) {
@@ -26303,6 +27326,49 @@ var JotForm = {
                 JotForm.getCollapseBar(el).run('click');
             }
         }
+    },
+    /**
+     * If Accessibility is enabled, returns the HTML element used to announce messages to the screen reader
+     * @see {@link https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/status_role}
+     * @returns {HTMLDivElement | null}
+     */
+    getAriaStatusElement() {
+      const ariaStatusMessage = document.getElementById('sr-status-message');
+      if (ariaStatusMessage) {
+        return ariaStatusMessage;
+      }
+      const ariaStatusDiv = document.createElement('div');
+
+      ariaStatusDiv.id = 'sr-status-message';
+      ariaStatusDiv.role = 'status';
+      ariaStatusDiv.ariaLive = 'polite';
+      ariaStatusDiv.style.fontSize = '0';
+      ariaStatusDiv.classList.add('sr-only');
+
+      // append screen-reader status updater to form
+      const formMain = document.querySelector('form.jotform-form div[role="main"]');
+      if (!formMain) return null;
+      // return the newly appended element
+      return formMain.appendChild(ariaStatusDiv);
+    },
+    /**
+     * If Accessibility is enabled, status messages (Live Regions) are designed to alert users when content on the page changes (e.g., "Form submitted," "Error found," "Items filtered").
+     * Do not announce messages for cancelled actions
+     * @param {string} message Message to announce to screen readers. Translates text if translate function is available.
+     */
+    setAriaStatus(message) {
+      const ariaStatusElement = JotForm.getAriaStatusElement();
+      if (!ariaStatusElement) return;
+
+      /** @type {((value: string) => string)} */
+      const translateFn = window.Translations && typeof window.Translations.t === 'function'
+        ? window.Translations.t
+        : value => value;
+
+      // Reset text content to empty before setting the new message so the live region is seen as changed.
+      // Screen readers only announce when the content actually changes; same text would not be announced.
+      ariaStatusElement.textContent = '';
+      ariaStatusElement.textContent = translateFn(message);
     },
     /**
      * Gets the container FORM of the element
@@ -26325,7 +27391,8 @@ var JotForm = {
     },
     /**
      * Gets the container of the input
-     * @param {Object} element
+     * @param {HTMLElement | string} element
+     * @returns {false | HTMLLIElement}
      */
     getContainer: function (element) {
         if (typeof element === 'string') {
@@ -26724,6 +27791,8 @@ var JotForm = {
                 setTimeout(function () {
                     JotForm.runAllConditions();
                 }, 50);
+
+                JotForm.setAriaStatus('All questions have been cleared successfully.')
             };
         });
     },
@@ -27832,6 +28901,8 @@ var JotForm = {
         var pages = [];
         // eslint-disable-next-line no-var
         var last;
+        const queryParameters = new URLSearchParams(window.location.search);
+        const isVerticalLayout = queryParameters.get('verticalLayout') === '1';
 
         // 345261: by default, back button containers gets its width from the label to maintain alignment
         // if they are wider than half the form, resize them
@@ -27901,6 +28972,9 @@ var JotForm = {
             var form = JotForm.getForm(section)
             section.querySelectorAll('.form-pagebreak-next').forEach(el => {
                 el.addEventListener('click', () => {
+                    if (isVerticalLayout) {
+                        return;
+                    }
                     if (JotForm.saving || JotForm.loadingPendingSubmission) {
                         return;
                     }
@@ -27998,6 +29072,9 @@ var JotForm = {
 
             section.querySelectorAll('.form-pagebreak-back').forEach(el => { // When back button is clicked
                 el.addEventListener('click', () => {
+                    if (isVerticalLayout) {
+                        return;
+                    }
                     if (!$this.noJump && window.parent && window.parent != window) {
                         window.parent.postMessage('scrollIntoView::'+form.id, '*');
                     }
@@ -28162,6 +29239,12 @@ var JotForm = {
                     JotForm.nextPage = false;
                 });
             }
+
+            if (isVerticalLayout) {
+                allSections.forEach(section => {
+                    section.style.display = 'block';
+                });
+            }
         }
     },
     /**
@@ -28315,7 +29398,47 @@ var JotForm = {
                 setTimeout(function() { form.scrollIntoView(true); }, 50);
             }
         }
+
+        // Focus first element of form when page changes
+        if(!getQuerystring('showAllHiddenPages')) {
+            const main = document.querySelector('[role="main"]');
+            let firstElement = main.firstElementChild;
+
+            if (firstElement) {
+                const isFormSection = firstElement.getAttribute('role') === 'presentation' && firstElement.tagName === 'UL' && firstElement.classList.contains('form-section')
+                if (isFormSection) {
+                    firstElement = section.querySelector('*').firstElementChild;
+                }
+                if (JotForm.isVisible(firstElement)) {
+                    if(!firstElement.hasAttribute('tabindex')) {
+                        firstElement.setAttribute('tabindex', '-1');
+                    }
+                    firstElement.focus();
+                }
+            }
+        }
+
+        if (JotForm.appointments) {
+            section.querySelectorAll('li.form-line[data-type="control_appointment"]').forEach(function (node) {
+                const fieldId = node.id && node.id.replace(/^id_/, '');
+                if (fieldId) {
+                    const appointmentData = JotForm.appointments[fieldId];
+                    if (appointmentData && appointmentData.pendingConstruct) {
+                        appointmentData.pendingConstruct();
+                    }
+                }
+            });
+        }
+
         return section;
+    },
+    showAllHiddenPages: function () {
+        JotForm.conditions = [];
+        JotForm.fieldConditions = {};
+
+        $$('.form-section, .page-section').each(function(section) {
+            JotForm.showFormSection(section);
+        });
     },
     getDimensions: element => {
         const computedStyles = window.getComputedStyle(element);
@@ -28385,6 +29508,10 @@ var JotForm = {
                         });
                         openBar.style.overflow = 'hidden';
                         openBar.closed = true;
+                        const previousBar = openBar.querySelector('.form-collapse-table');
+                        if (previousBar) {
+                            previousBar.setAttribute('aria-expanded', 'false');
+                        }
                     }
                     openBar = section;
                     section.style.overflow = 'hidden';
@@ -28483,7 +29610,7 @@ var JotForm = {
             });
 
             bar.addEventListener('keyup', (e) => {
-                if(e.keyCode === 13) {
+                if(e.keyCode === 13 || e.keyCode === 32) {
                     handleFormCollapseChecker();
                 }
             });
@@ -28554,6 +29681,9 @@ var JotForm = {
         var paymentField = $$('input[name="simple_fpc"]')[0];
         // eslint-disable-next-line no-var
         var paymentFieldId = $$('input[name="simple_fpc"]')[0].value;
+        const paymentUtils = typeof window.PaymentUtils === 'function'
+            ? new window.PaymentUtils()
+            : undefined;
         thisForm.addEventListener('submit', function PCIGatewaysCardInputValidation(event) {
             // clear errors first
             // eslint-disable-next-line no-var
@@ -28584,6 +29714,7 @@ var JotForm = {
                             erroredFields.forEach(function(input){
                                 JotForm.errored(input, errors);
                             });
+                            paymentUtils.errorLogOnFront(errors, `${JotForm.payment} -> jotform.js/PCIGatewaysCardInputValidate`);
                             return;
                         }
                         JotForm.enableButtons();
@@ -28598,11 +29729,28 @@ var JotForm = {
      */
 
     handleAuthNet: function () {
-        this.PCIGatewaysCardInputValidate();
+      this.PCIGatewaysCardInputValidate();
+      const paymentUtils = typeof window.PaymentUtils === 'function'
+        ? new window.PaymentUtils()
+        : undefined;
+      const hasNotEmulator = JotForm.authnetEmulator === 'none' || JotForm.authnetEmulator === '';
+      if (!!JotForm.hasAuthnetClientKey && hasNotEmulator) {
+        if (typeof __authnet === "function") {
+            // eslint-disable-next-line no-undef
+            JotForm.authnetPayment = __authnet();
+            JotForm.authnetPayment.init();
+        } else{
+            alert("Authnet payment script didn't work properly. Form will be reloaded");
+            paymentUtils.errorLogOnFront('Authnet payment script error', 'Authnet -> jotform.js/handleAuthnet');
+        }
+      }
     },
 
     handleBluesnap: function() {
         this.PCIGatewaysCardInputValidate();
+        const paymentUtils = typeof window.PaymentUtils === 'function'
+            ? new window.PaymentUtils()
+            : undefined;
         if (JotForm.isEditMode() || document.get.sid) { return; }
         else if (!JotForm.paymentProperties) { return; }
         else if (JotForm.paymentProperties.sca !== 'Yes') { return; }
@@ -28614,19 +29762,25 @@ var JotForm = {
         } catch (err) {
             console.error("ERR::", err);
             JotForm.errored(document.querySelector('li[data-type="control_bluesnap"]'), err);
+            paymentUtils.errorLogOnFront(err.message ? err.message : err, 'Bluesnap -> jotform.js/handleBluesnap');
         }
     },
 
     isCardinalValidationInitialized:  false,
     handleSignatureEvents: function() {
+        // Skip if advanced signature mode is enabled via URL param
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('isAdvancedSignature') === '1') {
+            return;
+        }
+
         function handleCanavasMousedDown(wrapperElem) {
             wrapperElem.removeClassName('signature-placeholder');
             this.removeEventListener('mousedown', handleCanavasMousedDown);
             this.removeEventListener('pointerdown', handleCanavasMousedDown);
         }
 
-        // eslint-disable-next-line no-var
-        var signatureElems = document.querySelectorAll('.jotform-form .signature-pad-wrapper');
+        const signatureElems = document.querySelectorAll('.jotform-form .signature-pad-wrapper');
         if (!signatureElems || signatureElems.length === 0) {
             return;
         }
@@ -28670,32 +29824,137 @@ var JotForm = {
         });
     },
     populateSignature : function(qid, value) {
-    // eslint-disable-next-line no-var
-    var signatureWrapper = $('id_' + qid).select('.signature-pad-wrapper');
-    // eslint-disable-next-line no-var
-    var signatureLine = signatureWrapper.first().select('.signature-line').first();
-    // eslint-disable-next-line no-var
-    var pad = signatureLine.select('.pad').first();
-
-    // if existing data is set
-    if (value) {
-        pad.addClassName('edit-signature').hide();
-        signatureLine.removeClassName('signature-placeholder');
-
-        // update hidden input
-        signatureLine.select('#input_' + qid).first().setValue(value);
-
-        // insert signature image
+        // Check for new Advanced Signature
         // eslint-disable-next-line no-var
-        var sigimage = (value && value.indexOf('data:image/png;') > -1) ? value : '/' + value + '?nc=1';
-        sigimage = JotForm.htmlEncode(sigimage);
-        signatureLine.insert('<img src="' + sigimage + '" id="signature-pad-image" class="signature-image-'+qid+'" style="margin-left:1px;"/>');
-    }
+        var container = $('id_' + qid);
+        if (container && container.select('.formAdvancedSignatureWrapper').length > 0) {
+            return this._populateAdvancedSignature(container, qid, value);
+        }
 
-    // update the clear button
-    // eslint-disable-next-line no-var
-    var clearButton = signatureWrapper[0].select('.clear-pad')[0];
-    clearButton.removeClassName('clear-pad').addClassName('edit-signature-pad').writeAttribute('data-id', qid);
+        // eslint-disable-next-line no-var
+        var signatureWrapper = $('id_' + qid).select('.signature-pad-wrapper');
+        // eslint-disable-next-line no-var
+        var signatureLine = signatureWrapper.first().select('.signature-line').first();
+        // eslint-disable-next-line no-var
+        var pad = signatureLine.select('.pad').first();
+
+        // if existing data is set
+        if (value) {
+            pad.addClassName('edit-signature').hide();
+            signatureLine.removeClassName('signature-placeholder');
+
+            // update hidden input
+            signatureLine.select('#input_' + qid).first().setValue(value);
+
+            // insert signature image
+            // eslint-disable-next-line no-var
+            var sigimage = (value && value.indexOf('data:image/png;') > -1) ? value : '/' + value + '?nc=1';
+            sigimage = JotForm.htmlEncode(sigimage);
+            signatureLine.insert('<img src="' + sigimage + '" id="signature-pad-image" class="signature-image-'+qid+'" style="margin-left:1px;"/>');
+        }
+
+        // update the clear button
+        // eslint-disable-next-line no-var
+        var clearButton = signatureWrapper[0].select('.clear-pad')[0];
+        clearButton.removeClassName('clear-pad').addClassName('edit-signature-pad').writeAttribute('data-id', qid);
+    },
+
+    _populateAdvancedSignature: function(container, qid, value) {
+        if (!value) return;
+
+        // eslint-disable-next-line no-var
+        var input = container.select('#input_' + qid).first();
+        if (input) {
+            input.setValue(value);
+            if (input.dispatchEvent) {
+                // eslint-disable-next-line no-var
+                var event = document.createEvent('HTMLEvents');
+                event.initEvent('change', true, true);
+                input.dispatchEvent(event);
+            }
+        }
+
+        // Try to find formAdvancedSignatureWrapper first (created by JFFormAdvancedSignature)
+        // eslint-disable-next-line no-var
+        var formAdvancedWrapper = container.select('.formAdvancedSignatureWrapper').first() ||
+                                   container.querySelector('.formAdvancedSignatureWrapper');
+
+        // eslint-disable-next-line no-var
+        var canvas = null;
+        if (formAdvancedWrapper) {
+            canvas = formAdvancedWrapper.querySelector('.signatureCanvas');
+        }
+        
+        if (!canvas) {
+            canvas = container.select('.signatureCanvas').first();
+        }
+
+        if (canvas) {
+            // Remove existing static-signature-wrapper if present (prevent duplicates)
+            // eslint-disable-next-line no-var
+            var existingWrapper = canvas.parentNode ? canvas.parentNode.querySelector('.static-signature-wrapper') : null;
+            if (existingWrapper) {
+                existingWrapper.remove();
+            }
+
+            // Hide canvas completely
+            canvas.style.display = 'none';
+            canvas.style.visibility = 'hidden';
+
+            // eslint-disable-next-line no-var
+            var sigimage = (value && value.indexOf('data:image/png;') > -1) ? value : '/' + value + '?nc=1';
+            sigimage = JotForm.htmlEncode(sigimage);
+
+            // Create wrapper to cover placeholder fully
+            // eslint-disable-next-line no-var
+            var wrapper = new Element('div', {
+                class: 'static-signature-wrapper'
+            });
+            
+            // Ensure wrapper is visible
+            wrapper.style.position = 'absolute';
+            wrapper.style.top = '0';
+            wrapper.style.left = '0';
+            wrapper.style.width = '100%';
+            wrapper.style.height = '100%';
+            wrapper.style.zIndex = '100';
+            wrapper.style.display = 'flex';
+            wrapper.style.alignItems = 'center';
+            wrapper.style.justifyContent = 'center';
+            wrapper.style.backgroundColor = '#fff';
+
+            // eslint-disable-next-line no-var
+            var img = new Element('img', {
+                src: sigimage,
+                id: 'signature-pad-image-' + qid,
+                class: 'signature-image-' + qid + ' static-signature-image'
+            });
+            
+            // Ensure image is visible
+            img.style.maxWidth = '90%';
+            img.style.maxHeight = '90%';
+            img.style.objectFit = 'contain';
+            img.style.display = 'block';
+
+            wrapper.insert(img);
+
+            // Append to canvas parent (which should be the canvas wrapper)
+            if (canvas.parentNode) {
+                // Ensure parent has relative positioning
+                if (canvas.parentNode.style.position !== 'relative' && canvas.parentNode.style.position !== 'absolute') {
+                    canvas.parentNode.style.position = 'relative';
+                }
+                // Ensure parent has proper dimensions
+                if (!canvas.parentNode.style.height || canvas.parentNode.style.height === '0px') {
+                    // eslint-disable-next-line no-var
+                    var computedHeight = window.getComputedStyle(canvas.parentNode).height;
+                    if (computedHeight && computedHeight !== '0px') {
+                        canvas.parentNode.style.height = computedHeight;
+                    }
+                }
+                canvas.parentNode.appendChild(wrapper);
+            }
+        }
     },
   /*
     POC usage of new Signature Modal.
@@ -28800,13 +30059,114 @@ var JotForm = {
             isDisabled: isDisabled,
             labelTitle: labelTitle,
             renderMode: 'embed',
-            initialMode: 'type'
+            initialMode: 'type',
+            initialFocus: !JotForm.isWorkflowForm
           });
         }
       });
     }
           // sign-signatures end
   },
+    handleAdvancedSignatureInputs: function () {
+      const hasAdvancedSignatureElements = document.querySelectorAll('[data-component="advanced-signature"]').length > 0;
+
+      if (!hasAdvancedSignatureElements) {
+        return;
+      }
+
+      const mountSignature = (container, signatureInput, config) => {
+        const onUse = output => {
+          signatureInput.value = output.value || '';
+          signatureInput.setAttribute('data-mode', output.mode);
+          signatureInput.setAttribute('data-font', output.font);
+          signatureInput.setAttribute('data-color', output.color);
+          signatureInput.setAttribute('data-text', output.text);
+
+          if (signatureInput.validateInput) {
+            signatureInput.validateInput();
+          }
+          if (signatureInput.triggerEvent) {
+            signatureInput.triggerEvent('change');
+          }
+        };
+
+        const getInitialValue = () => ({
+          value: signatureInput.value || '',
+          mode: signatureInput.dataset.mode || 'draw',
+          font: signatureInput.dataset.font || 'Yellowtail',
+          color: signatureInput.dataset.color || '#000000',
+          text: signatureInput.dataset.text || ''
+        });
+
+        window.JFFormAdvancedSignature({
+          trigger: container,
+          onUse,
+          getInitialValue,
+          renderMode: 'embed',
+          initialFocus: false,
+          ...config
+        });
+      };
+
+      const initAdvancedSignatures = () => {
+        const advancedSignatures = document.querySelectorAll('[data-component="advanced-signature"]');
+
+        if (!advancedSignatures || advancedSignatures.length === 0) {
+          return;
+        }
+
+        Array.from(advancedSignatures).forEach(wrapper => {
+          const signatureInput = wrapper.querySelector('input[type="hidden"]');
+
+          if (!signatureInput || !window.JFFormAdvancedSignature) {
+            return;
+          }
+
+          // Skip if already initialized
+          if (wrapper.querySelector('canvas.signatureCanvas')) {
+            return;
+          }
+
+          const width = parseInt(wrapper.dataset.width, 10) || 310;
+          const height = parseInt(wrapper.dataset.height, 10) || 160;
+          const signatureDraw = wrapper.dataset.signatureDraw !== 'No';
+          const signatureTyped = wrapper.dataset.signatureTyped !== 'No';
+          const signatureColor = wrapper.dataset.signatureColor === 'Yes';
+          const signatureFont = wrapper.dataset.signatureFont === 'Yes';
+          const signatureDefaultMethod = wrapper.dataset.signatureDefaultMethod || null;
+          const required = wrapper.dataset.required === 'Yes';
+
+          let initialMode = 'draw';
+          if (signatureDraw && signatureTyped) {
+            // If both are enabled, use signatureDefaultMethod if specified, otherwise default to 'draw'
+            initialMode = signatureDefaultMethod === 'type' ? 'type' : 'draw';
+          } else if (signatureTyped) {
+            initialMode = 'type';
+          }
+
+          mountSignature(wrapper, signatureInput, {
+            initialMode,
+            width,
+            height,
+            signatureDraw,
+            signatureTyped,
+            signatureColor,
+            signatureFont,
+            required
+          });
+        });
+      };
+
+      if (window.JFFormAdvancedSignature) {
+        initAdvancedSignatures();
+      } else {
+        const scriptEl = document.createElement('script');
+        const basePath = window.umdRootPath || '/s/umd/';
+        scriptEl.src = basePath + 'for-signature.js';
+        scriptEl.onload = initAdvancedSignatures;
+        document.head.appendChild(scriptEl);
+      }
+    },
     handleFITBInputs: function () {
         function getInputWidth(fitbInput) {
           // eslint-disable-next-line no-var
@@ -29143,6 +30503,16 @@ var JotForm = {
             return;
         }
 
+        const searchParams = new URLSearchParams(window.location.search);
+        const inputUsePaypalCompleteFormPayment = document.getElementById('usePaypalCompleteFormPayment');
+        if (inputUsePaypalCompleteFormPayment) {
+          if (searchParams.get('usePaypalCompleteFormPayment') === '1') {
+            inputUsePaypalCompleteFormPayment.value = 1;
+          } else {
+            inputUsePaypalCompleteFormPayment.remove();
+          }
+        }
+
         try {
             // eslint-disable-next-line no-var, no-undef
             var paypalComplete = new _paypalCompleteJS();
@@ -29164,11 +30534,15 @@ var JotForm = {
     handleCybersource: function () {
       // skip on edit mode
       this.PCIGatewaysCardInputValidate()
+      const paymentUtils = typeof window.PaymentUtils === 'function'
+        ? new window.PaymentUtils()
+        : undefined;
       if (window.location.pathname.match(/^\/edit/) || (["edit", "inlineEdit", "submissionToPDF"].indexOf(document.get.mode) > -1 && document.get.sid)) {
         return;
       }
       if (typeof __cybersource !== "function") {
-        alert("PagSeguro payment script didn't work properly. Form will be reloaded");
+        alert("Cybersource payment script didn't work properly. Form will be reloaded");
+        paymentUtils.errorLogOnFront('Cybersource payment script error', 'Cybersource -> jotform.js/handleCybersource');
         location.reload();
         return;
       }
@@ -29229,6 +30603,9 @@ var JotForm = {
         // eslint-disable-next-line no-var
         var content = document.createElement('div');
         content.className = 'form-description-content';
+        if (typeof input === 'string') {
+            content.id = `${input}-description`; 
+        }
         // eslint-disable-next-line no-var
         var indicator;
 
@@ -29593,8 +30970,8 @@ var JotForm = {
     },
     /**
      * When an input is errored
-     * @param {Object} input
-     * @param {Object} message
+     * @param {HTMLElement} input
+     * @param {string | { message: string; }} message
      */
     errored: function (input, message) {
 
@@ -29634,9 +31011,9 @@ var JotForm = {
         // Log to kibana when user sees a notification which will link them to a page they have not yet visited. This
         // is a potential cause for blank submissions or missing fields and for the moment we just want to understand
         // what is calling `errored` in this way
+        const errorMessage = typeof message === 'string' ? message : (message.message || '');
+        
         if (Object.keys(JotForm.visitedPages || {}).length) {
-            // eslint-disable-next-line no-var
-            var errorMessage = message && (message.message || message);
             // eslint-disable-next-line no-var
             var allSections = Array.from(document.querySelectorAll('.page-section'));
             // eslint-disable-next-line no-var
@@ -29668,12 +31045,12 @@ var JotForm = {
             if (!collapse.errored) {
               if(JotForm.newDefaultTheme){
                 collapse.select(".form-collapse-mid")[0].insert({
-                  top: '<img width="30px" height= "30px" src="' + preLink + 'images/exclamation-octagon.png"> ' // image may change for new theme
+                  top: '<img width="30px" height= "30px" src="' + preLink + 'assets/v3/images/exclamation-octagon.png"> ' // image may change for new theme
               }).setStyle({color: 'red'});
               }
               else{
                 collapse.select(".form-collapse-mid")[0].insert({
-                  top: '<img src="' + preLink + 'images/exclamation-octagon.png"> '
+                  top: '<img src="' + preLink + 'assets/v3/images/exclamation-octagon.png"> '
               }).setStyle({color: 'red'});
               }
               collapse.errored = true;
@@ -29704,22 +31081,13 @@ var JotForm = {
         //}
         insertEl.select('.form-error-message').invoke('remove');
 
-        // eslint-disable-next-line no-undef
-        error_message_span = document.createElement('span');
-        // eslint-disable-next-line no-undef
+        const error_message_span = document.createElement('span');
         error_message_span.className = 'error-navigation-message';
-        // eslint-disable-next-line no-undef
-        error_message_span.innerText= message;
-
-        if ((new URLSearchParams(window.location.search)).get('ariaLabelOnRequiredError')) {
-            // eslint-disable-next-line no-var
-            var closestSublabel = input.parentElement.querySelector(`[for="${input.id}"`);
-            // eslint-disable-next-line no-var
-            var closestSublabelName = closestSublabel && closestSublabel.innerText;
-            if (closestSublabelName) {
-                // eslint-disable-next-line no-undef
-                error_message_span.ariaLabel = `${message} (${closestSublabelName})`
-            }
+        error_message_span.innerText = errorMessage;
+        const labelInput = container.querySelector(`[for="${input.id}"`);
+        const labelInputText = labelInput && labelInput.textContent;
+        if (labelInputText) {
+            error_message_span.ariaLabel = `${errorMessage} (${labelInputText})`
         }
 
         // eslint-disable-next-line no-var
@@ -29740,8 +31108,7 @@ var JotForm = {
 
         formErrorArrowEl.appendChild(formErrorArrowInnerEl);
 
-        // eslint-disable-next-line no-undef
-        insertEl.insert(formErrorMessageEl.insert('<img src="' + preLink + 'images/exclamation-octagon.png"> ').insert(error_message_span).insert(formErrorArrowEl));
+        insertEl.insert(formErrorMessageEl.insert('<img src="' + preLink + 'assets/v3/images/exclamation-octagon.png"> ').insert(error_message_span).insert(formErrorArrowEl));
 
         JotForm.iframeHeightCaller();
         JotForm.updateErrorNavigation();
@@ -30007,6 +31374,9 @@ var JotForm = {
             // eslint-disable-next-line no-var
             var handleFormSubmit = function (e) {
                 try {
+                    if (window && window !== window.parent) {
+                        window.parent.postMessage({ action: 'submission-started' });
+                    }
                     trackSubmitSource('form');
 
                     if ($('payment_total_checksum')) {
@@ -30235,6 +31605,29 @@ var JotForm = {
                         window.localStorage.removeItem(saclKey);
                     }
 
+                    if (window && window !== window.parent) {
+                        const params = new URLSearchParams(window.location.search);
+                        const isChatgptApp = params.get('app') === 'chatgpt';
+                        const isAutopilot = params.get('appName') === 'autopilot-form-agent';
+                        if (isChatgptApp || isAutopilot) {
+                            const formData = new FormData(form);
+                            // Convert FormData to a plain object for postMessage compatibility (FormData is not cloneable in Chrome)
+                            const formDataObject = {};
+                            formData.forEach((value, key) => {
+                                if (formDataObject[key]) {
+                                    // Handle multiple values for the same key
+                                    if (!Array.isArray(formDataObject[key])) {
+                                        formDataObject[key] = [formDataObject[key]];
+                                    }
+                                    formDataObject[key].push(value);
+                                } else {
+                                    formDataObject[key] = value;
+                                }
+                            });
+                            window.parent.postMessage({ action: 'form-submit-request', data: formDataObject, submitUrl: form.action });
+                        }
+                        window.parent.postMessage({ action: 'submission-end' });
+                    }
                 } catch (err) {
                     JotForm.error(err);
                     e.stop();
@@ -30283,6 +31676,9 @@ var JotForm = {
                 // We will clear the contents of hidden fields, users don't want see the hidden fields on subscriptions
                 if (JotForm.clearFieldOnHide !== "dontClear") {
                     $$('.form-field-hidden input', '.form-field-hidden select', '.form-field-hidden textarea').each(function (input) {
+                        if (input.up('.form-field-hidden').dataset.type === 'control_fileupload') {
+                            JotForm.removeTempUploads(input);
+                        }
                         if (input.name == "simple_fpc") { // do not clear this field's value
                             return;
                         }
@@ -31762,12 +33158,13 @@ var JotForm = {
                     break;
                 case "Url":
                 case "URL": // We are using URL instead of Url on some components validation, I don't want to change directly Url to URL because it can be break somewhere.
+                    // Parse URL: [protocol]://[host].[extension]/[path]
+                    // If protocol is missing, default to 'https'
                     try {
-                        // eslint-disable-next-line no-var
-                        var checkUrlValue = input.value;
-                        if (input.value.startsWith('www.')) {
-                            checkUrlValue = 'https://' + input.value;
-                        }
+                    let checkUrlValue = input.value;
+                    if (!checkUrlValue.match(/^[a-zA-Z]+:\/\//i)) {
+                        checkUrlValue = 'https://' + checkUrlValue;
+                    }
                         new URL(checkUrlValue);
                     } catch (error) {
                         return JotForm.errored(input, JotForm.texts.url, dontShowMessage);
@@ -32408,7 +33805,7 @@ var JotForm = {
                 JotForm.showField(qid);
             }
             // eslint-disable-next-line no-undef
-            new nicEditor({iconsPath : location.protocol + '//www.jotform.com/images/nicEditorIcons.gif?v2'}).panelInstance('input_' + qid);
+            new nicEditor({iconsPath : location.protocol + '//www.jotform.com/assets/v3/images/nicEditorIcons.gif?v2'}).panelInstance('input_' + qid);
             JotForm.updateAreaFromRich(field);
             // hide again the initially hidden rich textarea after setup
             if (isFieldHidden) {
@@ -33108,6 +34505,7 @@ var JotForm = {
                     placeholder: '_',
                     autoclear: false,
                     definitions,
+                    showMaskOnFocus: false,
                     mask: maskValue,
                     inputEventOnly: true,
                     postValidation: function(characters,t,a,isValid) {
@@ -33403,7 +34801,7 @@ var JotForm = {
                 // eslint-disable-next-line no-var
                 var script = document.createElement('script');
                 script.setAttribute('type', 'text/javascript');
-                script.setAttribute('src', '//cdn.jotfor.ms/js/form-tester.js?rev=' + new Date().getTime());
+                script.setAttribute('src', '//cdn.jotfor.ms/s/static/latest/js/form-tester.js?rev=' + new Date().getTime());
                 form.appendChild(script);
             }
         });
@@ -34917,6 +36315,15 @@ var JotForm = {
         JotForm.runConditionForId(qid);
     },
 
+    removeTempUploads: function (element) {
+        if (!element) return;
+        const qid = element.closest('.form-line').id.split('_')[1];
+        if (!qid) return;
+        document.querySelectorAll(`input[name="temp_upload[q${qid}_fileUpload][]"]`).forEach(fileInput => {
+            fileInput.remove();
+        });
+    },
+
     sendFormOpenId: function (form, type) {
         try {
             // eslint-disable-next-line no-var
@@ -35234,6 +36641,22 @@ function isIframeEmbedForm() {
     }
 }
 
+function isEditEmbedForm() {
+    try {
+        return ((window.self !== window.top) && (window.location.href.indexOf("isEditFormApp") > -1));
+    } catch (e) {
+        return false;
+    }
+}
+
+function isEditModalForm() {
+    try {
+        return ((window.self !== window.top) && (window.location.href.indexOf("isEditModalForm") > -1));
+    } catch (e) {
+        return false;
+    }
+}
+
 function isIframeEmbedFormPure() {
     try {
         return (window.self !== window.top);
@@ -35262,6 +36685,14 @@ if(isIframeEmbedForm()) {
     document.querySelector('html').addClassName('isIframeEmbed');
     window.addEventListener('resize', callIframeHeightCaller);
     window.addEventListener('DOMContentLoaded', callIframeHeightCaller);
+}
+
+if(isEditEmbedForm()) {
+    document.querySelector('html').addClassName('isEditFormApp');
+}
+
+if(isEditModalForm()) {
+    document.querySelector('html').addClassName('isEditModal');
 }
 
 if (isIframeEmbedFormPure()) {
@@ -35880,7 +37311,6 @@ function nameInputListenerForAssistantTooltip() {
       console.log(e);
   }
 }
-
 //
 // CalendarView (for Prototype)
 // calendarview.org
@@ -35986,7 +37416,11 @@ Calendar.handleMouseDownEvent = function(event)
 // clean this up!
 Calendar.handleMouseUpEvent = function(event, key)
 {
-  var el        = Event.element(event);
+  var el = Event.element(event);
+  if (el.tagName === 'BUTTON' && el.dataset.date) {
+    el = el.closest('td');
+  }
+
   var calendar  = el.calendar;
   var isNewDate = false;
 
@@ -36171,35 +37605,47 @@ function handlePopupUI(calendar, style) {
     month = dateArray.slice(0, dateArray.length - 1).join(' ');
     year = dateArray[dateArray.length - 1];
 
-    var checkHeader = container.querySelectorAll('.calendar-new-header');
-    if (checkHeader && checkHeader.length > 0) {
-      for (var index = 0; index < checkHeader.length; index++) {
-        checkHeader[index].remove();
-      }
+    var newHeader = container.querySelector('.calendar-new-header');
+    if (!newHeader) {
+      title.style.display = 'none';
+      newHeader = document.createElement('tr');
+      newHeader.classList.add('calendar-new-header');
+      title.parentNode.insertAdjacentElement('beforebegin', newHeader);
     }
 
-    var newHeader = document.createElement('div');
-    newHeader.classList.add('calendar-new-header');
-    newHeader.innerHTML = '<div class="calendar-new-month"><span>'+month+'</span></div><div class="calendar-new-year">'+year+'</div>';
-    title.parentNode.insertAdjacentElement('beforebegin', newHeader);
+    var calendarNewMonth = newHeader.querySelector('.calendar-new-month[aria-live="polite"]');
+    var calendarNewYear = newHeader.querySelector('.calendar-new-year[aria-live="polite"]');
+      if (calendarNewMonth && calendarNewYear) {
+        calendarNewMonth.querySelector('.calendar-new-month-text').innerHTML = month;
+        calendarNewYear.querySelector('.calendar-new-year-text').innerHTML = year;
+      } else {
+      var newHeaderTh = document.createElement('th');
+      newHeaderTh.setAttribute('style', 'background-color: transparent !important; color: inherit; font-size: 16px; font-weight: 500;');
+      newHeaderTh.classList.add('calendar-new-month');
+      newHeaderTh.setAttribute('aria-live', 'polite');
+      newHeaderTh.innerHTML = '<span class="calendar-new-month-text">'+month+'</span>';
+      newHeader.appendChild(newHeaderTh);
+      newHeaderTh = document.createElement('th');
+      newHeaderTh.setAttribute('style', 'background-color: transparent !important; color: inherit; font-size: 16px; font-weight: 500;');
+      newHeaderTh.classList.add('calendar-new-year');
+      newHeaderTh.setAttribute('aria-live', 'polite');
+      newHeaderTh.innerHTML = '<span class="calendar-new-year-text">'+year+'</span>';
+      newHeader.appendChild(newHeaderTh);
 
-    var newMonthNode = newHeader.querySelector('.calendar-new-month');
-    var newYearNode = newHeader.querySelector('.calendar-new-year');
+      calendarNewMonth = newHeader.querySelector('.calendar-new-month');
+      calendarNewYear = newHeader.querySelector('.calendar-new-year');
+      nextMonth.setAttribute('aria-label', 'Next Month')
+      prevMonth.setAttribute('aria-label', 'Previous Month')
+      nextYear.setAttribute('aria-label', 'Next Year')
+      prevYear.setAttribute('aria-label', 'Previous Year')
+      calendarNewMonth.appendChild(prevMonth);
+      calendarNewMonth.appendChild(nextMonth);
+      calendarNewYear.appendChild(prevYear);
+      calendarNewYear.appendChild(nextYear);
+
+      container.querySelector('.calendar-temporary').remove();
+    }
     
-    newMonthNode.appendChild(prevMonth);
-    newMonthNode.appendChild(nextMonth);
-
-    nextMonth.setAttribute('aria-label', 'Next Month, current month is '+month)
-    prevMonth.setAttribute('aria-label', 'Previous Month, current month is '+month)
-
-    nextYear.setAttribute('aria-label', 'Next Year, current year is '+year)
-    prevYear.setAttribute('aria-label', 'Previous Year, current year is '+year)
-
-    newYearNode.appendChild(prevYear);
-    newYearNode.appendChild(nextYear);
-
-    title.style.display = 'none';
-
     if (calendar.triggerElement && calendar.triggerInputElement) {
       var dateValue = new Date(calendar.triggerInputElement.value);
       var ariaLabelDate = !isNaN(dateValue) ? 'Change date, ' + dateValue.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Choose Date'
@@ -36392,7 +37838,7 @@ Calendar.setup = function(params)
           calendar.showAtElement(targetElem.querySelector('span input'));
         }
         if (!autoCalendar) {
-          var selectedDate = calendar.container.querySelector('td.selected');
+          var selectedDate = calendar.container.querySelector('td.selected button');
           selectedDate.setAttribute('tabindex', 0);
           selectedDate.focus();
         }
@@ -36538,36 +37984,34 @@ Calendar.prototype = {
   },
 
   setDynamicLimits: function() {
+    function getComparativeDate(dateString) {
+      // Match dynamic date strings like "today+9" or "today-3"
+      const match = dateString.match(/^today([+-])(\d+)$/i);
 
-    var getComparativeDate = function(dat) {
-      var todayKey = dat.indexOf('today') > -1 ? /today/ : new RegExp(Calendar.TODAY.trim(), 'i');
-      if(todayKey.test(dat)) {
-        var comp = new Date();
-        var offset = parseInt(dat.replace(/\s/g, "").split(todayKey)[1]) || 0;
-        comp.setDate(comp.getDate() + offset);
+      // If it’s not a dynamic string, just return it as-is (YYYY-MM-DD)
+      if (!match) return dateString;
 
-        var getUnselectedDaysCount = function (){
-          var curDate = new Date();
-          var unselectedDaysCount = 0;
-          while (curDate <= comp) {
-            var dayName = curDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-            if (lim.days[dayName] !== undefined && lim.days[dayName] === false){
-              unselectedDaysCount++;
-            }
+      const [_fullMatch, operator = '+', valueStr = "0"] = match;
+      const daysCount = parseInt(valueStr, 10) || 0;
+      const endDate = new Date();
 
-            curDate.setDate(curDate.getDate() + 1);
-          }
-          return unselectedDaysCount;
-        }
+      let count = 0;
 
-        if (lim.countSelectedDaysOnly) {
-          comp.setDate(comp.getDate() + getUnselectedDaysCount());
-        }
-        return comp.getFullYear()+"-"+JotForm.addZeros(comp.getMonth()+1, 2)+"-"+JotForm.addZeros(comp.getDate(), 2);
-      } else {
-        return dat;
+      while (count < daysCount) {
+        // Go to the next day, either back or forward depending on the operator
+        endDate.setDate(endDate.getDate() + (operator === '-' ? -1 : 1));
+
+        // Get the day of the week - Ensure the correct locale to match the lim.days
+        const dayName = endDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+
+        // Count increments only if the day is selectable
+        if (!lim.countSelectedDaysOnly || lim.days[dayName]) count++;
       }
+
+      // Return the dateString as YYYY-MM-DD
+      return endDate.getFullYear()+"-"+JotForm.addZeros(endDate.getMonth() + 1, 2)+"-"+JotForm.addZeros(endDate.getDate(), 2);
     }
+
     var lim = this.limits
     lim.start = getComparativeDate(lim.start);
     lim.end = getComparativeDate(lim.end);
@@ -36624,22 +38068,35 @@ Calendar.prototype = {
     Element.getElementsBySelector(this.container, 'tbody tr').each(
       function(row, i) {
         var rowHasDays = false;
+        row.setAttribute('role', 'row');
         row.immediateDescendants().each(
           function(cell, j) {
             var day            = date.getDate();
             var dayOfWeek      = date.getDay();
             var isCurrentMonth = (date.getMonth() == month);
+            var cellDate = new Date(date);
+            var daySpan = new Element('span');
+            daySpan.setAttribute('aria-hidden', true);
+            daySpan.update(day);
+
+            var button = new Element('button', {
+              tabindex: -1,
+              role: 'button',
+              'aria-pressed': false,
+              'data-date': cellDate.toLocaleDateString("en-US"),
+              'aria-label': cellDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+              style: 'pointer-events: none; padding: 0; border: none; background: none; cursor: pointer; color: inherit;',
+            });
+            button.addEventListener('focus', () => cell.addClassName('selected'));
+            button.addEventListener('blur', () => cell.removeClassName('selected'));
+            button.appendChild(daySpan);
+            cell.update(button);
 
             // Reset classes on the cell
             cell.className = '';
-            cell.date = new Date(date);
-            cell.update(day);
-
-            var cellAria = cell.date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            cell.setAttribute('aria-label', cellAria);
-            cell.setAttribute('data-date', cell.date.toLocaleDateString("en-US"));
-            cell.setAttribute('tabindex', -1);
-            cell.setAttribute('aria-selected', false);
+            cell.date = cellDate;
+            cell.setAttribute('role', 'gridcell');
+            
             // Account for days of the month other than the current month
             if (!isCurrentMonth){
               cell.addClassName('otherDay');
@@ -36651,10 +38108,9 @@ Calendar.prototype = {
             // Ensure the current day is selected
             if (isCurrentMonth && day == dayOfMonth) {
               cell.addClassName('selected');
-              cell.setAttribute('tabindex', 0);
-              cell.setAttribute('aria-selected', true);
-
-              calendar.currentDateElement = cell;
+              button.setAttribute('tabindex', 0);
+              button.setAttribute('aria-pressed', true);
+              cell.currentDateElement = button;
             }
             
             var allDays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -36788,7 +38244,8 @@ Calendar.prototype = {
 
             // Today
             if (date.getFullYear() == thisYear && date.getMonth() == thisMonth && day == thisDay){
-              cell.addClassName('today');                
+              cell.addClassName('today');
+              button.setAttribute('aria-current', 'date');
             }
 
             // Weekend
@@ -36907,7 +38364,7 @@ Calendar.prototype = {
     }
 
     // Calendar Table
-    var table = this.table ? this.table.update("") : new Element('table', { role: 'grid' });
+    var table = this.table ? this.table.update("") : new Element('table', { role: 'grid', tabindex: -1 });
     this.table = table;
 
     // Calendar Header
@@ -36916,6 +38373,7 @@ Calendar.prototype = {
 
     if (!JotForm.isSourceTeam && !JotForm.isMarvelTeam) {
       var row = new Element('tr');
+      row.setAttribute('aria-hidden', true);
       var cell = new Element('td', { colSpan: 7 });
       cell.addClassName('title');
       row.appendChild(cell);
@@ -36923,7 +38381,7 @@ Calendar.prototype = {
     }
 
     // Calendar Navigation
-    row = new Element('tr');
+    row = new Element('tr', { class: 'calendar-temporary' });
 
     var checkLegacyForm = document.querySelectorAll('.calendar.popup[data-version="v2"]');
     if (checkLegacyForm && checkLegacyForm.length > 0) {
@@ -36951,7 +38409,11 @@ Calendar.prototype = {
 
     for (var i = startDay; i <= endDay; ++i) {
 
-      cell = new Element('th').update(Calendar.SHORT_DAY_NAMES[i]);
+      cell = new Element('th', { scope: 'col' });
+      var shortNameSpan = new Element('span', { 'aria-hidden': true }).update(Calendar.SHORT_DAY_NAMES[i]);
+      var longNameSpan = new Element('span', { style: 'position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;' }).update(Calendar.DAY_NAMES[i]);
+      cell.appendChild(shortNameSpan);
+      cell.appendChild(longNameSpan);
       
       if (i === startDay || i == endDay){
         cell.addClassName('weekend');          
@@ -36965,6 +38427,7 @@ Calendar.prototype = {
     for (i = 7; i > 0; --i) {
       row = tbody.appendChild(new Element('tr'));
       row.addClassName('days');
+      row.setAttribute('role', 'row');
       for (var j = 7; j > 0; --j) {
         cell = row.appendChild(new Element('td', { tabindex: -1, 'aria-selected': false }));  
         cell.calendar = this;
@@ -37072,7 +38535,7 @@ Calendar.prototype = {
     var calendarNode = this.container;
     var isButtonActiveElement = document.activeElement.closest('.calendar-new-header') ? document.activeElement : false;
 
-    var days = calendarNode.querySelectorAll('.days td:not(.unslectable)');
+    var days = calendarNode.querySelectorAll('.days td:not(.unslectable) button');
     var index =  Array.from(days).findIndex(d => d.getAttribute('data-date') === activeDay); 
 
     if (!calendarNode || !this.triggerElement) {
@@ -37111,6 +38574,7 @@ Calendar.prototype = {
         this.hide();
       }
     
+      e.target = e.target.closest('td');
       Calendar.handleMouseUpEvent(e, e.key);
   
       if (isButtonActiveElement) {
@@ -37508,4 +38972,3 @@ Date.prototype.setFullYear = function(y) {
   }
   this.__msh_oldSetFullYear(y);
 };
-

@@ -92,6 +92,26 @@
       return;
     }
 
+    if(erroredField.type === 'hidden' && erroredLine.dataset.type === 'control_captcha') {
+      var iframe = erroredLine.querySelector('iframe');    
+      if (iframe) {
+        // Update erroredField to point to iframe if it's hCaptcha
+        erroredField = iframe;
+      }
+    }
+
+    if(erroredLine.dataset.type === 'control_fileupload') {
+      const hasFailedUpload = erroredField.querySelector('.qq-upload-fail');
+
+      if(hasFailedUpload) {
+        // Handle the case where there's a failed upload
+        const deleteButton = hasFailedUpload.querySelector('.qq-upload-delete');
+        if(deleteButton) {
+          erroredField = deleteButton;
+        }
+      }
+    }
+
     // The closed section collapse should be visible
     var parent = erroredLine.parentNode;
     var sectionCollapse = (parent && parent.hasClassName('form-section-closed')) ? parent.querySelector('li[data-type="control_collapse"] .form-collapse-table') : null;
