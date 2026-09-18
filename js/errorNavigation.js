@@ -12,7 +12,7 @@
     errors: [],
     scrollToBottomOnClose: true,
   };
- 
+
   function getMessage() {
     if (state.errors.length <= 0) {
       return JotForm.texts.doneMessage;
@@ -35,6 +35,9 @@
     container.classList.add('error-navigation-container');
     container.style.display = 'none';
     container.setAttribute('aria-hidden', 'true');
+    // Focusable so validation can move the SR cursor to the summary (with See
+    // Errors next to it) instead of leaving focus on Submit/Next.
+    container.setAttribute('tabindex', '-1');
 
     var inner = document.createElement('div');
     inner.classList.add('error-navigation-inner');
@@ -61,7 +64,7 @@
     doneButton.addEventListener('click', close);
     inner.appendChild(doneButton);
 
-    section.appendChild(container);
+    section.insertBefore(container, section.firstChild);
     return container;
   }
 
@@ -72,6 +75,40 @@
     }
   }
 
+  function getAdvancedSignatureFocusTarget(line) {
+    var wrapper = line.querySelector('.formAdvancedSignatureWrapper');
+    if (!wrapper) {
+      return null;
+    }
+
+    var typeInput = wrapper.querySelector('input[type="text"]:not([disabled])');
+    if (typeInput) {
+      return typeInput;
+    }
+
+    var drawCanvas = wrapper.querySelector('canvas.signatureCanvas');
+    if (drawCanvas && drawCanvas.getAttribute('aria-hidden') !== 'true' && drawCanvas.tabIndex >= 0) {
+      return drawCanvas;
+    }
+
+    return null;
+  }
+
+  /**
+   * Widget questions validate through a hidden proxy input that cannot take
+   * focus. The operable control lives inside the widget iframe, as with
+   * hCaptcha, so error navigation should target the frame instead.
+   *
+   * @param {HTMLElement} line - The errored `.form-line` for a widget question.
+   * @returns {HTMLIFrameElement | null} The widget iframe to focus, or null.
+   */
+  function getWidgetFocusTarget(line) {
+    const widgetFrame = line.querySelector('[data-component="widget-field"] iframe')
+      || line.querySelector('iframe');
+
+    return widgetFrame || null;
+  }
+
   function scrollAndFocus(nextCurrent, line, field, nextButton) {
     state.current = nextCurrent;
     line.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -79,9 +116,21 @@
     nextButton.disabled = false;
   }
 
+  function isNewErrorCount() {
+    const domErrorCount = state.section
+      ? state.section.querySelectorAll('.form-line.form-line-error').length
+      : document.querySelectorAll('.form-all .form-line.form-line-error').length;
+    const stateErrorCount = state.errors.length;
+    return domErrorCount !== stateErrorCount;
+  }
+
   function focusToNextError() {
     var nextButton = document.querySelector('.error-navigation-next-button');
     nextButton.disabled = true;
+
+    // reset current index if error count has changed
+    if (isNewErrorCount()) state.current = -1;
+
     var nextCurrent = (state.current + 1) % state.errors.length;
     var erroredLine = state.errors[nextCurrent];
     if (!erroredLine) {
@@ -93,10 +142,24 @@
     }
 
     if(erroredField.type === 'hidden' && erroredLine.dataset.type === 'control_captcha') {
-      var iframe = erroredLine.querySelector('iframe');    
+      var iframe = erroredLine.querySelector('iframe');
       if (iframe) {
         // Update erroredField to point to iframe if it's hCaptcha
         erroredField = iframe;
+      }
+    }
+
+    if (erroredField.type === 'hidden' && erroredLine.dataset.type === 'control_widget') {
+      const widgetFocusTarget = getWidgetFocusTarget(erroredLine);
+      if (widgetFocusTarget) {
+        erroredField = widgetFocusTarget;
+      }
+    }
+
+    if(erroredField.type === 'hidden' && erroredLine.dataset.type === 'control_signature') {
+      var advancedSignatureFocusTarget = getAdvancedSignatureFocusTarget(erroredLine);
+      if (advancedSignatureFocusTarget) {
+        erroredField = advancedSignatureFocusTarget;
       }
     }
 
@@ -122,6 +185,31 @@
         if (pagesIndex === undefined && parent.parentNode) {
           pagesIndex = parent.parentNode.pagesIndex;
         }
+
+        // Log when error navigation takes the user to a page they have not yet visited.
+        // This is a potential cause for blank submissions or missing fields.
+        if (Object.keys(JotForm.visitedPages || {}).length && pagesIndex && !JotForm.visitedPages[pagesIndex]) {
+          if (!JotForm.errorNavigationMessages) JotForm.errorNavigationMessages = [];
+
+          const allSections = Array.from(document.querySelectorAll('.page-section'));
+          const currentPageIndex = allSections.indexOf(JotForm.currentSection) + 1;
+          const errorMessageEl = erroredLine.querySelector('.form-error-message');
+          const errorMessage = errorMessageEl ? errorMessageEl.innerText.trim() : '';
+
+          if (JotForm.errorNavigationMessages.indexOf(errorMessage) === -1) {
+            JotForm.errorCatcherLog({ message: {
+              targetInput: erroredField.id || erroredField.className,
+              targetInputPageIndex: pagesIndex,
+              currentPageIndex: currentPageIndex,
+              visitedPages: JotForm.visitedPages,
+              message: errorMessage,
+              stack: (new Error()).stack
+            }}, 'ERROR_NAVIGATION_FOR_NON_VISITED_PAGE');
+
+            JotForm.errorNavigationMessages.push(errorMessage);
+          }
+        }
+
         JotForm.jumpToPage(pagesIndex, true);
       }
     }
@@ -131,7 +219,7 @@
         if (!parent.hasClassName('form-section-closed') || document.activeElement === erroredField) {
           clearInterval(collapseInterval);
         }
-        scrollAndFocus(nextCurrent, erroredLine, erroredField, nextButton);  
+        scrollAndFocus(nextCurrent, erroredLine, erroredField, nextButton);
       }, 500);
     } else {
       scrollAndFocus(nextCurrent, erroredLine, erroredField, nextButton);
@@ -182,15 +270,27 @@
         return;
       }
 
+      // reset current index if error count has changed
+      if (isNewErrorCount()) state.current = -1;
+
       state.errors = invalidFields;
 
       var nav = state.section.querySelector('.error-navigation-container');
+      var newlyCreated = false;
       if (!nav) {
         if (!render) {
           return;
         }
         nav = createNavigation(state.section);
+        newlyCreated = true;
       }
+
+      // Focus only on the no-banner → banner transition. update() also runs on
+      // revalidation while typing; stealing focus then would be worse than the
+      // original defect.
+      var shouldFocusSummary = newlyCreated
+        || nav.getAttribute('aria-hidden') === 'true'
+        || nav.style.display === 'none';
 
       if (state.errors.length > 0) {
         nav.querySelector('.error-navigation-next-button').style.display = 'block';
@@ -208,6 +308,10 @@
       nav.style.display = null;
       nav.setAttribute('aria-hidden', 'false');
       nav.classList.remove('fading-out');
+
+      if (shouldFocusSummary && state.errors.length > 0 && typeof nav.focus === 'function') {
+        nav.focus();
+      }
     },
   };
 });

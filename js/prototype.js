@@ -1776,8 +1776,6 @@ Ajax.Request = Class.create(Ajax.Base, {
 
   setRequestHeaders: function() {
     var headers = {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-Prototype-Version': Prototype.Version,
       'Accept': 'text/javascript, text/html, application/xml, text/xml, */*'
     };
 
@@ -5888,7 +5886,7 @@ Form.EventObserver = Class.create(Abstract.EventObserver, {
     window.attachEvent('onunload', _destroyCache);
 
   if (Prototype.Browser.WebKit)
-    window.addEventListener('unload', Prototype.emptyFunction, false);
+    window.addEventListener('beforeunload', Prototype.emptyFunction, false);
 
 
   var _getDOMEventName = Prototype.K,

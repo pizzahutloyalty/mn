@@ -1506,7 +1506,7 @@ Element.addMethods(Protoplus.utils);
 /**
  * Memmory leak prevention
  */
-Event.observe(window, 'unload', function(){
+Event.observe(window, 'beforeunload', function(){
     Protoplus = null;
 });
 

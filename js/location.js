@@ -6,21 +6,21 @@ function setLocationEvents(country, state, city){
 
     var countryChange = function(){
 
-        var sel = country.getSelected();
+        var sel = country.selectedIndex >= 0 ? country.options[country.selectedIndex] : country;
 
         if(sel.value == "other"){
             var inp = new Element('input', {size:'10'});
             country.parentNode.replaceChild(inp, country);
             country = inp;
-            country.hint('Country');
+            country.placeholder = 'Country';
             var inp1 = new Element('input', {size:'10'});
             state.parentNode.replaceChild(inp1, state);
             state = inp1;
-            state.hint('State');
+            state.placeholder = 'State';
             var inp2 = new Element('input', {size:'10'});
             city.parentNode.replaceChild(inp2, city);
             city = inp2;
-            city.hint('City');
+            city.placeholder = 'City';
             return;
         }
 
@@ -69,7 +69,7 @@ function setLocationEvents(country, state, city){
                         state.appendChild(op);
                     });
                     state.insert("<option value='other'>Other</option>");
-                    state.selectOption('Any');
+                    state.value = 'Any';
                 }
             }
         });
@@ -77,17 +77,17 @@ function setLocationEvents(country, state, city){
 
     var stateChange = function(){
 
-        var sel = state.getSelected();
+        var sel = state.selectedIndex >= 0 ? state.options[state.selectedIndex] : state;
 
         if(sel.value == "other"){
             var inp = new Element('input', {size:'10'});
             state.parentNode.replaceChild(inp, state);
             state = inp;
-            state.hint('State');
+            state.placeholder = 'State';
             var inp2 = new Element('input', {size:'10'});
             city.parentNode.replaceChild(inp2, city);
             city = inp2;
-            city.hint('City');
+            city.placeholder = 'City';
             return;
         }
 
@@ -128,19 +128,19 @@ function setLocationEvents(country, state, city){
                         city.appendChild(op);
                     });
                     city.insert('<option value="other">Other</option>');
-                    city.selectOption('Any');
+                    city.value = 'Any';
                 }
             }
         });
     };
 
     var cityChange = function(){
-        var sel = city.getSelected();
+        var sel = city.selectedIndex >= 0 ? city.options[city.selectedIndex] : city;
         if(sel.value == "other"){
             var inp = new Element('input', {size:'10'});
             city.parentNode.replaceChild(inp, city);
             city = inp;
-            city.hint('City');
+            city.placeholder = 'City';
         }
     };
 
